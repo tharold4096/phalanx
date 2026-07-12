@@ -1,1 +1,83 @@
-{"version":1,"lastModified":"2026-07-10T00:00:00.000Z","log":[],"badges":{}}
+{
+  "version": 2,
+  "lastModified": "2026-07-12T02:06:31.822Z",
+  "log": [
+    {
+      "ts": "2026-07-11T01:10:37.917Z",
+      "date": "2026-07-11",
+      "domain": "course",
+      "activity": "pset",
+      "note": "STATS Quiz Accomplished",
+      "awarded": 50
+    },
+    {
+      "ts": "2026-07-12T01:25:05.245Z",
+      "date": "2026-07-12",
+      "domain": "body",
+      "activity": "train",
+      "note": "Day 1 of 4 week",
+      "awarded": 40
+    },
+    {
+      "ts": "2026-07-12T02:06:31.822Z",
+      "date": "2026-07-12",
+      "domain": "course",
+      "activity": "video",
+      "note": "AI Fluency videos",
+      "awarded": 10
+    }
+  ],
+  "badges": {
+    "cert-google": {
+      "status": "in-progress",
+      "date": null
+    },
+    "cert-anthropic": {
+      "status": "in-progress",
+      "date": null
+    },
+    "car-payout": {
+      "status": "in-progress",
+      "date": null
+    }
+  },
+  "army": {
+    "troops": {
+      "cyber": 6,
+      "unity": 6,
+      "course": 6,
+      "body": 6
+    },
+    "tiers": {
+      "cyber": 0,
+      "unity": 0,
+      "course": 0,
+      "body": 0
+    },
+    "spent": {
+      "cyber": 0,
+      "unity": 0,
+      "course": 0,
+      "body": 0
+    },
+    "bonuses": {
+      "cyber": 0,
+      "unity": 0,
+      "course": 0,
+      "body": 0
+    }
+  },
+  "research": [],
+  "formation": "wall",
+  "campaign": {
+    "weekStart": "2026-07-07",
+    "enemyId": "iron",
+    "exploit": "cyber",
+    "confirmed": true,
+    "revealed": false,
+    "strengthKnown": false
+  },
+  "lastResult": null,
+  "bosses": {},
+  "regroup": null
+}
