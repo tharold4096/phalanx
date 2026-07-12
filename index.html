@@ -3,32 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PHALANX — Progression</title>
+<title>PHALANX — War Room</title>
 <!--
-  PHALANX PROGRESSION SYSTEM
-  ==========================
-  Design decisions (edit CONFIG below to change any of this — logic never needs touching):
+  PHALANX WAR ROOM — v2
+  =====================
+  Everything from v1 is preserved exactly (XP engine, curve, momentum, soft caps,
+  badges, persistence). v2 layers a warfare game on top. All tunables live in
+  CONFIG — logic never hardcodes values.
 
-  XP anchor: 1 XP ~ 1 minute of focused baseline effort. Discrete achievements are
-  priced as (typical time) x (difficulty/novelty multiplier).
+  SACRED CORE (never punished, never lost):
+    - Character Level / XP: 250 * (L-1)^1.6 cumulative. No cap.
+    - Momentum: active days in trailing 7. 3-4 = +10%, 5+ = +20%. Rest is neutral.
+    - Soft daily caps: overflow earns at 50%.
+    - Prestige Badges: manual confirm only. Never auto-awarded.
 
-  Leveling curve: cumulative XP to reach level L = 250 * (L-1)^1.6
-  Long-game shape: ~level 10 in a few months of steady work, level 50 on an
-  OSCP-scale multi-year timeline. No level cap.
+  WAR LAYER (new in v2):
+    - Army Size: permanent, only grows. Bought with domain currency (Reinforce).
+    - Army Readiness: volatile, a pure reflection of trailing-7 momentum per
+      domain, mapped to 0-100%. No separate decay clock. Recomputed on load only.
+    - Currencies: each domain's XP also mints spendable currency at
+      CONFIG.war.currencyRate. Intel / Supply / Muscle / Materiel.
+    - Upgrades: Recruit -> Veteran -> Elite per domain. More force, higher
+      readiness floor (quiet weeks sting less).
+    - Weekly skirmish: Monday-start week. Suggested enemy (confirm or swap).
+      Hidden exploit vector revealed by recon (Intel). Live tug-of-war push
+      line recomputed on load. Win banks currency. Loss is NEUTRAL — by design.
+    - Bosses: badges in bossGroups marked in-progress become active sieges.
+      Assaults can be LOST -> regroup (temporary readiness dip + cooldown).
+      Core XP / Level / Army Size are never touched by a loss. Badge
+      achievement stays fully manual.
+    - Research: cross-cutting unlocks. Some gated behind real achieved badges.
 
-  Momentum (consistency without guilt): count of active days in the trailing 7.
-  3-4 active days = +10% XP on new logs, 5+ = +20%. Rest days are neutral —
-  nothing ever resets or punishes.
-
-  Soft daily caps: per-domain daily XP past the cap earns at 50%. Caps sized so a
-  legitimately big day (a Hard box, a long study block) fits; grinding trivial
-  entries doesn't scale.
-
-  Badges: manual-only. Never auto-awarded. status: planned | in-progress | achieved.
-
-  Data: saved to localStorage on every change (key below). Export downloads
-  phalanx-data.json for committing to the repo; Import restores from that file
-  (confirm dialog shows both timestamps — newest wins is YOUR call, not automatic).
+  DATA: localStorage (phalanx-save-v1 key kept for continuity), schema version 2.
+  v1 saves migrate automatically. Export/import unchanged (import confirms,
+  never silently overwrites, and migrates incoming files too).
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
@@ -58,7 +66,7 @@ h1,h2,h3{font-family:'Chakra Petch',sans-serif;color:var(--bone);letter-spacing:
 .mono{font-family:'JetBrains Mono',monospace}
 
 /* ---------- header: the shield ring ---------- */
-header{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin-bottom:36px}
+header{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin-bottom:22px}
 .shield{position:relative;width:170px;height:170px;flex:none}
 .shield svg{width:100%;height:100%;transform:rotate(-90deg)}
 .shield .lambda{
@@ -80,6 +88,17 @@ header{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin-bottom:36p
 .momentum-pips i{width:14px;height:6px;background:var(--rivet);display:block}
 .momentum-pips i.on{background:var(--bronze)}
 
+/* ---------- tabs ---------- */
+nav.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;border-bottom:1px solid var(--rivet);padding-bottom:0}
+nav.tabs button{
+  background:transparent;border:none;border-bottom:3px solid transparent;border-radius:0;
+  color:var(--ash);font-size:13px;padding:10px 16px;letter-spacing:.1em;
+}
+nav.tabs button:hover{color:var(--bone)}
+nav.tabs button.active{color:var(--bronze);border-bottom-color:var(--bronze)}
+section.tab{display:none}
+section.tab.active{display:block}
+
 /* ---------- layout ---------- */
 .grid{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:20px}
 @media(max-width:820px){.grid{grid-template-columns:1fr}}
@@ -87,6 +106,7 @@ header{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin-bottom:36p
 .panel h2{font-size:14px;text-transform:uppercase;letter-spacing:.14em;margin-bottom:16px;
   padding-bottom:10px;border-bottom:1px solid var(--rivet)}
 .panel h2 .accent{color:var(--bronze)}
+.panel + .panel{margin-top:20px}
 
 /* ---------- log form ---------- */
 label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin:14px 0 6px}
@@ -102,10 +122,13 @@ button{
   border:none;border-radius:4px;cursor:pointer;font-size:13px;padding:11px 18px;
 }
 button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
+button:disabled{opacity:.4;cursor:not-allowed}
 .btn-primary{background:var(--bronze);color:#1a130c;width:100%;margin-top:16px}
-.btn-primary:hover{background:#d5793a}
+.btn-primary:hover:not(:disabled){background:#d5793a}
 .btn-ghost{background:transparent;color:var(--ash);border:1px solid var(--rivet);font-size:11px;padding:8px 12px}
-.btn-ghost:hover{border-color:var(--bronze);color:var(--bronze)}
+.btn-ghost:hover:not(:disabled){border-color:var(--bronze);color:var(--bronze)}
+.btn-war{background:var(--blood);color:var(--bone);font-size:11px;padding:8px 12px}
+.btn-war:hover:not(:disabled){background:#a83329}
 
 /* ---------- domain bars ---------- */
 .domain{margin-bottom:16px}
@@ -116,10 +139,9 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--blood),var(--bronze));transition:width .5s ease}
 
 /* ---------- badge armory ---------- */
-.armory{margin-top:20px}
 .badge-group{margin-bottom:18px}
 .badge-group h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ash);margin-bottom:10px}
-.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
 .badge{
   border:1px solid var(--rivet);border-radius:4px;padding:10px 12px;cursor:pointer;
   background:var(--iron);transition:border-color .15s;
@@ -133,6 +155,14 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 .badge.achieved{border-color:var(--moss);background:rgba(111,143,94,.08)}
 .badge.achieved .meta{color:var(--moss)}
 .badge.achieved .name::before{content:"Λ ";color:var(--moss)}
+.boss-strip{
+  margin-top:9px;padding-top:8px;border-top:1px dashed var(--rivet);
+  font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.7;
+}
+.boss-strip .b-title{color:var(--blood);font-weight:700;letter-spacing:.08em}
+.boss-strip .ok{color:var(--moss)}
+.boss-strip .warn{color:var(--bronze)}
+.boss-strip button{margin-top:6px;width:100%}
 
 /* ---------- log history ---------- */
 .log-list{list-style:none;max-height:300px;overflow-y:auto}
@@ -145,17 +175,83 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
 .log-list li .xp{font-family:'JetBrains Mono',monospace;color:var(--bronze);white-space:nowrap}
 .log-list li button{padding:0 6px;font-size:11px;background:none;color:var(--blood)}
 
+/* ---------- war room ---------- */
+.campaign-head{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.campaign-head .foe{font-family:'Chakra Petch',sans-serif;font-size:20px;color:var(--bone)}
+.campaign-head .flavor{font-size:12px;margin-top:3px;max-width:520px}
+.campaign-head .wk{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;color:var(--ash);text-transform:uppercase}
+.fog{
+  margin-top:12px;padding:10px 12px;border:1px dashed var(--rivet);border-radius:4px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;display:flex;gap:12px;align-items:center;
+  justify-content:space-between;flex-wrap:wrap;
+}
+.fog .veil{color:var(--ash)}
+.fog .revealed{color:var(--bronze)}
+.last-result{font-family:'JetBrains Mono',monospace;font-size:10px;margin-top:10px;letter-spacing:.05em}
+.last-result.won{color:var(--moss)}
+.last-result.lost{color:var(--ash)}
+.suggest-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.suggest-row select{width:auto;min-width:220px}
+
+.pushline-wrap{margin-top:4px}
+.pushline-svg{width:100%;height:auto;display:block}
+.pushline-meta{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:8px;flex-wrap:wrap;gap:8px}
+.pushline-meta .p{color:var(--bronze)}
+.pushline-meta .e{color:#c4544a}
+.mv{transition:transform .9s cubic-bezier(.22,.9,.3,1)}
+.standoff-note{font-family:'JetBrains Mono',monospace;font-size:11px;text-align:center;margin-top:6px;color:var(--ash)}
+
+.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.unit{border:1px solid var(--rivet);border-radius:4px;background:var(--iron);padding:12px}
+.unit .u-head{display:flex;justify-content:space-between;align-items:baseline}
+.unit .u-head b{font-family:'Chakra Petch',sans-serif;color:var(--bone);font-size:13px;letter-spacing:.05em}
+.unit .tier{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ash)}
+.unit .tier.t1{color:var(--bronze)}
+.unit .tier.t2{color:var(--moss)}
+.unit .u-stats{font-family:'JetBrains Mono',monospace;font-size:11px;margin:8px 0;line-height:1.9}
+.unit .u-stats .cur{color:var(--bronze)}
+.readiness-bar{height:6px;background:var(--steel);border-radius:2px;overflow:hidden;margin:2px 0 8px}
+.readiness-bar i{display:block;height:100%;background:var(--bronze);transition:width .5s ease}
+.readiness-bar i.low{background:var(--blood)}
+.u-actions{display:flex;gap:8px}
+.u-actions button{flex:1;font-size:10px;padding:8px 6px}
+.flash{animation:spendflash .7s ease 1}
+@keyframes spendflash{0%{background:rgba(196,104,43,.25)}100%{background:transparent}}
+
+.war-summary{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:4px}
+.war-summary .stat b{display:block;font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--bone)}
+.war-summary .stat span{font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+.formation-row{display:flex;gap:8px;align-items:center;margin-left:auto}
+.formation-row button.sel{border-color:var(--bronze);color:var(--bronze)}
+
+/* ---------- research ---------- */
+.research-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.rnode{border:1px solid var(--rivet);border-radius:4px;background:var(--iron);padding:12px}
+.rnode .r-name{font-family:'Chakra Petch',sans-serif;color:var(--bone);font-size:13px;letter-spacing:.05em}
+.rnode .r-desc{font-size:12px;margin:6px 0 8px;line-height:1.5}
+.rnode .r-cost{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--bronze)}
+.rnode .r-gate{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blood);margin-top:4px}
+.rnode button{width:100%;margin-top:10px}
+.rnode.owned{border-color:var(--moss);background:rgba(111,143,94,.08)}
+.rnode.owned .r-name::before{content:"Λ ";color:var(--moss)}
+.rnode.locked{opacity:.65}
+
 /* ---------- data bar ---------- */
 .data-bar{display:flex;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}
 .data-bar .note{font-size:11px;font-family:'JetBrains Mono',monospace}
 .toast{
   position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
   background:var(--bronze);color:#1a130c;font-family:'Chakra Petch',sans-serif;font-weight:700;
-  padding:12px 22px;border-radius:4px;letter-spacing:.06em;display:none;z-index:50;
+  padding:12px 22px;border-radius:4px;letter-spacing:.06em;display:none;z-index:50;max-width:90vw;text-align:center;
 }
 .levelup{animation:pulse 1.2s ease 2}
 @keyframes pulse{0%,100%{filter:none}50%{filter:drop-shadow(0 0 18px rgba(196,104,43,.9))}}
-@media (prefers-reduced-motion: reduce){ .levelup{animation:none} .bar i{transition:none} }
+@media (prefers-reduced-motion: reduce){
+  .levelup{animation:none}
+  .bar i,.readiness-bar i{transition:none}
+  .mv{transition:none}
+  .flash{animation:none}
+}
 </style>
 </head>
 <body>
@@ -186,37 +282,80 @@ button:focus-visible{outline:2px solid var(--bone);outline-offset:2px}
   </div>
 </header>
 
-<div class="grid">
+<nav class="tabs" role="tablist">
+  <button id="tabBtn-war" class="active" role="tab">War Room</button>
+  <button id="tabBtn-log" role="tab">Log</button>
+  <button id="tabBtn-armory" role="tab">Armory</button>
+  <button id="tabBtn-research" role="tab">Research</button>
+</nav>
+
+<!-- ============ WAR ROOM ============ -->
+<section class="tab active" id="tab-war">
   <div class="panel">
-    <h2>Log <span class="accent">//</span> Entry</h2>
-    <label for="fDomain">Domain</label>
-    <select id="fDomain"></select>
-    <label for="fActivity">Activity</label>
-    <select id="fActivity"></select>
-    <label for="fNote">Note (optional)</label>
-    <input type="text" id="fNote" placeholder="e.g. HTB: Keeper — rooted" maxlength="120">
-    <label for="fDate">Date</label>
-    <input type="date" id="fDate">
-    <div class="xp-preview" id="xpPreview"></div>
-    <button class="btn-primary" id="logBtn">Log it</button>
+    <h2>Campaign <span class="accent">//</span> Week</h2>
+    <div id="campaignBox"></div>
   </div>
 
-  <div>
+  <div class="panel">
+    <h2>The Line <span class="accent">//</span> Push</h2>
+    <div class="war-summary" id="warSummary"></div>
+    <div class="pushline-wrap">
+      <svg class="pushline-svg" id="pushSvg" viewBox="0 0 700 150" aria-label="Battle push line"></svg>
+      <div class="pushline-meta" id="pushMeta"></div>
+      <div class="standoff-note" id="standoffNote" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Forces <span class="accent">//</span> Reinforce &amp; Upgrade</h2>
+    <div class="units" id="units"></div>
+  </div>
+</section>
+
+<!-- ============ LOG ============ -->
+<section class="tab" id="tab-log">
+  <div class="grid">
     <div class="panel">
-      <h2>Domains <span class="accent">//</span> Today &amp; All-time</h2>
-      <div id="domains"></div>
+      <h2>Log <span class="accent">//</span> Entry</h2>
+      <label for="fDomain">Domain</label>
+      <select id="fDomain"></select>
+      <label for="fActivity">Activity</label>
+      <select id="fActivity"></select>
+      <label for="fNote">Note (optional)</label>
+      <input type="text" id="fNote" placeholder="e.g. HTB: Keeper — rooted" maxlength="120">
+      <label for="fDate">Date</label>
+      <input type="date" id="fDate">
+      <div class="xp-preview" id="xpPreview"></div>
+      <button class="btn-primary" id="logBtn">Log it</button>
     </div>
-    <div class="panel" style="margin-top:20px">
-      <h2>Recent <span class="accent">//</span> Log</h2>
-      <ul class="log-list" id="logList"></ul>
+    <div>
+      <div class="panel">
+        <h2>Domains <span class="accent">//</span> Today &amp; All-time</h2>
+        <div id="domains"></div>
+      </div>
+      <div class="panel">
+        <h2>Recent <span class="accent">//</span> Log</h2>
+        <ul class="log-list" id="logList"></ul>
+      </div>
     </div>
   </div>
-</div>
+</section>
 
-<div class="panel armory">
-  <h2>The Armory <span class="accent">//</span> Prestige Badges <span style="float:right;font-size:10px;color:var(--ash);letter-spacing:.06em">click a badge to cycle: planned → in progress → achieved</span></h2>
-  <div id="armory"></div>
-</div>
+<!-- ============ ARMORY ============ -->
+<section class="tab" id="tab-armory">
+  <div class="panel">
+    <h2>The Armory <span class="accent">//</span> Prestige Badges <span style="float:right;font-size:10px;color:var(--ash);letter-spacing:.06em">click a badge to cycle: planned → in progress → achieved</span></h2>
+    <div id="armory"></div>
+  </div>
+</section>
+
+<!-- ============ RESEARCH ============ -->
+<section class="tab" id="tab-research">
+  <div class="panel">
+    <h2>Research <span class="accent">//</span> Doctrine &amp; Unlocks</h2>
+    <div class="research-grid" id="research"></div>
+  </div>
+</section>
 
 <div class="data-bar">
   <button class="btn-ghost" id="exportBtn">Export phalanx-data.json</button>
@@ -292,22 +431,106 @@ const CONFIG = {
     { id:"phy-pistol", group:"Physical", name:"Pistol squat" },
     { id:"phy-mu",     group:"Physical", name:"Muscle-up" },
   ],
+
+  /* =========== WAR LAYER (v2) =========== */
+  war: {
+    currencyRate: 0.1,                 // currency minted per 1 domain XP
+    currencies: { cyber:"Intel", course:"Supply", body:"Muscle", unity:"Materiel" },
+    unitNames:  { cyber:"Scouts", course:"Quartermasters", body:"Shock Troops", unity:"Engineers" },
+    foundingTroops: 6,                 // starting garrison per domain (one-time, on migration)
+    forcePerTroop: 2,
+    reinforceCost: 20,                 // currency per troop
+    tierNames: ["Recruit","Veteran","Elite"],
+    tierCosts: [0, 150, 400],          // cost to REACH tier index (from previous)
+    tierForceMult: [1, 1.3, 1.6],
+    tierReadinessFloor: [0, 10, 20],   // higher-tier troops lose their edge more slowly
+    readinessByActiveDays: [30,45,60,70,80,90,95,100], // active days (0-7) -> readiness %
+    commanderBase: 20, commanderPerLevel: 10,          // you count as force too
+    reconCost: 40,                     // Intel to burn away the fog
+    exploitThreshold: 60,              // exploit fires if that domain readiness < this
+    exploitBonus: 0.15,                // enemy force bonus when exploiting
+    winThreshold: 0.55,                // push position needed at week end to bank the win
+    pushK: { wall: 1.6, wedge: 2.6 },  // wall dampens swings, wedge amplifies them
+    skirmishReward: { all: 25, focusExtra: 25 },  // currency banked on a win
+    regroup: { penalty: 15, days: 3 }, // temporary readiness dip + cooldown after a lost assault
+    boss: { base: 100, exponent: 1.5, siegeBonus: 0.10 },
+    bossGroups: ["Certifications","Career"],
+    bossTiers: {
+      "cert-google":1, "cert-sql":1, "cert-anthropic":1, "cert-secplus":2,
+      "cert-cissp":3, "cert-ceh":3, "cert-oscp":4,
+      "car-sub":2, "car-payout":2, "car-income":3, "car-role":3, "car-con":1,
+    },
+    enemies: [
+      { id:"attrition", name:"The Attrition Legion", flavor:"Grinds down armies that stop drilling. Prey: the under-trained.", focus:"body",   difficulty:1.00 },
+      { id:"shadow",    name:"The Shadow Compact",   flavor:"Strikes from blind spots. Only scouts see them coming.",          focus:"cyber",  difficulty:1.05 },
+      { id:"famine",    name:"The Famine Host",      flavor:"Starves supply lines left untended.",                             focus:"course", difficulty:0.90 },
+      { id:"clockwork", name:"The Clockwork Horde",  flavor:"Outbuilds any engineer who stops building.",                      focus:"unity",  difficulty:0.95 },
+      { id:"iron",      name:"The Iron Tide",        flavor:"A wall of shields. Raw strength decides this one.",               focus:"body",   difficulty:1.10 },
+      { id:"veil",      name:"The Veiled Court",     flavor:"Feints and misdirection. Intelligence wins here.",                focus:"cyber",  difficulty:0.85 },
+    ],
+    focusWeight: 1.5,                  // campaign-focus domain force multiplier
+    research: [
+      { id:"field-scouts",     name:"Field Scouts",     desc:"Forward observers halve the Intel cost of recon.",                       cost:{cyber:120} },
+      { id:"fortifications",   name:"Fortifications",   desc:"+10 readiness floor for every domain — a buffer for busy weeks.",        cost:{unity:150} },
+      { id:"siege-works",      name:"Siege Works",      desc:"Rams and towers: +10% force in boss assaults.",                          cost:{unity:100, course:60} },
+      { id:"wedge",            name:"Wedge Formation",  desc:"Unlock the aggressive Wedge — bigger swings, both directions.",          cost:{body:100, cyber:80} },
+      { id:"veteran-doctrine", name:"Veteran Doctrine", desc:"Codified training: troop upgrades cost 25% less.",                       cost:{course:200}, requiresBadge:"cert-secplus" },
+      { id:"ghost-protocols",  name:"Ghost Protocols",  desc:"Deep recon: revealing the fog also exposes enemy strength.",             cost:{cyber:100},  requiresBadge:"cert-google" },
+    ],
+  },
 };
 
 /* =====================================================================
-   STATE + PERSISTENCE
+   STATE + PERSISTENCE (v2 schema; v1 saves migrate automatically)
    ===================================================================== */
 const SAVE_KEY = "phalanx-save-v1";
 const BADGE_STATUSES = ["planned","in-progress","achieved"];
-let state = load();
+
+function domainIds(){ return CONFIG.domains.map(d=>d.id); }
+function zeroPerDomain(v){ const o={}; for(const id of domainIds()) o[id]=v; return o; }
 
 function freshState(){
-  return { version:1, lastModified:new Date().toISOString(), log:[], badges:{} };
+  return migrate({ version:1, lastModified:new Date().toISOString(), log:[], badges:{} });
 }
+function migrate(s){
+  if(!s || typeof s!=="object") return freshState();
+  if(!Array.isArray(s.log)) s.log=[];
+  if(!s.badges || typeof s.badges!=="object") s.badges={};
+  if(s.version>=2 && s.army && s.army.troops) { fillWarDefaults(s); return s; }
+  // v1 -> v2
+  s.version = 2;
+  s.army = {
+    troops:  zeroPerDomain(CONFIG.war.foundingTroops),  // founding garrison
+    tiers:   zeroPerDomain(0),
+    spent:   zeroPerDomain(0),
+    bonuses: zeroPerDomain(0),
+  };
+  s.research = [];
+  s.formation = "wall";
+  s.campaign = null;
+  s.lastResult = null;
+  s.bosses = {};
+  s.regroup = null;
+  return s;
+}
+function fillWarDefaults(s){
+  for(const key of ["troops","tiers","spent","bonuses"]){
+    if(!s.army[key]) s.army[key]={};
+    for(const id of domainIds()) if(typeof s.army[key][id]!=="number") s.army[key][id]= key==="troops"?CONFIG.war.foundingTroops:0;
+  }
+  if(!Array.isArray(s.research)) s.research=[];
+  if(s.formation!=="wall" && s.formation!=="wedge") s.formation="wall";
+  if(s.campaign===undefined) s.campaign=null;
+  if(s.lastResult===undefined) s.lastResult=null;
+  if(!s.bosses || typeof s.bosses!=="object") s.bosses={};
+  if(s.regroup===undefined) s.regroup=null;
+}
+let state = load();
+
 function load(){
   try{
     const raw = localStorage.getItem(SAVE_KEY);
-    if(raw){ return JSON.parse(raw); }
+    if(raw){ return migrate(JSON.parse(raw)); }
   }catch(e){ console.error("load failed", e); }
   return freshState();
 }
@@ -323,7 +546,7 @@ function save(){
 }
 
 /* =====================================================================
-   XP ENGINE
+   XP ENGINE — preserved exactly from v1
    ===================================================================== */
 function activityById(domainId, actId){
   const d = CONFIG.domains.find(d=>d.id===domainId);
@@ -371,11 +594,245 @@ function levelFromXp(xp){
 }
 
 /* =====================================================================
+   WAR ENGINE (v2)
+   ===================================================================== */
+const W = CONFIG.war;
+
+function domainAllXp(domainId){
+  return state.log.filter(e=>e.domain===domainId).reduce((s,e)=>s+e.awarded,0);
+}
+function balance(domainId){
+  const minted = Math.floor(domainAllXp(domainId) * W.currencyRate);
+  return Math.max(0, minted + (state.army.bonuses[domainId]||0) - (state.army.spent[domainId]||0));
+}
+function activeDays7Domain(domainId, refDate){
+  const days = new Set(state.log.filter(e=>e.domain===domainId).map(e=>e.date));
+  let count=0;
+  for(let i=1;i<=7;i++){
+    const d = new Date(refDate||new Date()); d.setDate(d.getDate()-i);
+    if(days.has(isoDate(d))) count++;
+  }
+  return count;
+}
+function regroupActive(){
+  if(!state.regroup) return false;
+  const until = new Date(state.regroup.until+"T23:59:59");
+  if(new Date() > until){ state.regroup=null; return false; }
+  return true;
+}
+function readinessOf(domainId){
+  const n = activeDays7Domain(domainId);
+  let r = W.readinessByActiveDays[Math.min(7,Math.max(0,n))];
+  let floor = W.tierReadinessFloor[state.army.tiers[domainId]||0];
+  if(hasResearch("fortifications")) floor += 10;
+  r = Math.max(r, floor);
+  if(regroupActive()) r -= W.regroup.penalty;
+  return Math.max(5, Math.min(100, r));
+}
+function armyReadiness(){ // overall = simple average across domains
+  const ids = domainIds();
+  return Math.round(ids.reduce((s,id)=>s+readinessOf(id),0)/ids.length);
+}
+function armySizeTotal(){ return domainIds().reduce((s,id)=>s+(state.army.troops[id]||0),0); }
+function hasResearch(id){ return state.research.includes(id); }
+function tierOf(domainId){ return state.army.tiers[domainId]||0; }
+
+function troopForce(domainId, weight){
+  const troops = state.army.troops[domainId]||0;
+  const mult = W.tierForceMult[tierOf(domainId)];
+  return troops * W.forcePerTroop * mult * (readinessOf(domainId)/100) * (weight||1);
+}
+function playerForce(campaign){ // campaign-weighted; pass null for neutral
+  const lvl = levelFromXp(totalXp());
+  let f = W.commanderBase + W.commanderPerLevel*lvl;
+  const enemy = campaign ? enemyById(campaign.enemyId) : null;
+  for(const id of domainIds()){
+    const wgt = (enemy && enemy.focus===id) ? W.focusWeight : 1;
+    f += troopForce(id, wgt);
+  }
+  return f;
+}
+function enemyById(id){ return W.enemies.find(e=>e.id===id); }
+
+/* ---- weeks + seeded choices ---- */
+function currentWeekStart(){ // Monday of this week, ISO date
+  const d = new Date(); const day = (d.getDay()+6)%7; // Mon=0
+  d.setDate(d.getDate()-day);
+  return isoDate(d);
+}
+function hashStr(s){
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0);
+}
+function seededPick(arr, salt){
+  if(!arr.length) return null;
+  return arr[ hashStr(currentWeekStart()+"|"+salt) % arr.length ];
+}
+function neglectedDomain(){ // lowest XP share over trailing 14 days
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-14);
+  const totals = zeroPerDomain(0);
+  for(const e of state.log){ if(new Date(e.date+"T12:00:00")>=cutoff) totals[e.domain]=(totals[e.domain]||0)+e.awarded; }
+  let min=Infinity, picks=[];
+  for(const id of domainIds()){
+    if(totals[id]<min){ min=totals[id]; picks=[id]; }
+    else if(totals[id]===min){ picks.push(id); }
+  }
+  return seededPick(picks,"neglect");
+}
+
+/* ---- campaign lifecycle: runs once on load ---- */
+function ensureCampaign(){
+  const wk = currentWeekStart();
+  if(state.campaign && state.campaign.weekStart !== wk){
+    if(state.campaign.confirmed) resolveCampaign();
+    state.campaign = null;
+  }
+  if(!state.campaign){
+    const neglect = neglectedDomain();
+    const matching = W.enemies.filter(e=>e.focus===neglect);
+    const enemy = matching.length ? seededPick(matching,"enemy") : seededPick(W.enemies,"enemy");
+    // exploit: usually the neglected domain — recon tells you for sure
+    const roll = hashStr(wk+"|exploit")%100;
+    const exploit = roll<60 ? neglect : seededPick(domainIds().filter(d=>d!==neglect),"exploit2");
+    state.campaign = { weekStart:wk, enemyId:enemy.id, exploit, confirmed:false, revealed:false, strengthKnown:false };
+    save();
+  }
+}
+function resolveCampaign(){
+  const c = state.campaign;
+  const {pos} = pushPosition();
+  const enemy = enemyById(c.enemyId);
+  const won = pos >= W.winThreshold;
+  if(won){
+    for(const id of domainIds()) state.army.bonuses[id]=(state.army.bonuses[id]||0)+W.skirmishReward.all;
+    state.army.bonuses[enemy.focus]+=W.skirmishReward.focusExtra;
+  }
+  state.lastResult = { name:enemy.name, won, pos:Math.round(pos*100), weekStart:c.weekStart };
+  // loss is neutral by design — nothing rolls back, nothing is taken
+}
+function reconCostNow(){ return hasResearch("field-scouts") ? Math.round(W.reconCost/2) : W.reconCost; }
+function doRecon(){
+  const c = state.campaign;
+  if(!c || !c.confirmed || c.revealed) return;
+  const cost = reconCostNow();
+  if(balance("cyber") < cost){ toast("Not enough Intel — "+cost+" needed"); return; }
+  state.army.spent.cyber += cost;
+  c.revealed = true;
+  if(hasResearch("ghost-protocols")) c.strengthKnown = true;
+  save(); renderAll();
+  toast("Fog lifted — they target your "+domainName(c.exploit));
+}
+
+/* ---- the push line ---- */
+function pushPosition(){
+  const c = state.campaign;
+  if(!c || !c.confirmed) return { pos:0.5, P:playerForce(null), E:null, exploitActive:false };
+  const enemy = enemyById(c.enemyId);
+  const P = playerForce(c);
+  let E = enemy.difficulty * playerForce(null);
+  const exploitActive = readinessOf(c.exploit) < W.exploitThreshold;
+  if(exploitActive) E *= (1+W.exploitBonus);
+  const k = W.pushK[state.formation]||W.pushK.wall;
+  let pos = 0.5 + k*(P-E)/(P+E);
+  pos = Math.max(0.06, Math.min(0.94, pos));
+  return { pos, P, E, exploitActive };
+}
+
+/* ---- bosses ---- */
+function isBossBadge(b){ return W.bossGroups.includes(b.group); }
+function bossForce(badgeId){
+  const tier = W.bossTiers[badgeId]||2;
+  return Math.round(W.boss.base * Math.pow(tier, W.boss.exponent));
+}
+function bossState(badgeId){
+  return state.bosses[badgeId] || { attempts:0, lastAttempt:null, breached:false, lastMargin:null };
+}
+function bossCooldownUntil(bs){
+  if(!bs.lastAttempt || bs.breached || bs.lastWon) return null;
+  const d = new Date(bs.lastAttempt+"T12:00:00");
+  d.setDate(d.getDate()+W.regroup.days);
+  return d;
+}
+function attemptBoss(badgeId, badgeName){
+  const bs = bossState(badgeId);
+  const cd = bossCooldownUntil(bs);
+  if(cd && new Date()<cd){ toast("Regrouping — next assault "+isoDate(cd)); return; }
+  const need = bossForce(badgeId);
+  let P = playerForce(null);
+  if(hasResearch("siege-works")) P *= (1+W.boss.siegeBonus);
+  const margin = P/need;
+  if(!confirm(`Assault ${badgeName}?\n\nYour force: ${Math.round(P)}\nTheir walls: ${need}\n\nA loss forces a regroup: -${W.regroup.penalty} readiness for ${W.regroup.days} days.`)) return;
+  bs.attempts++; bs.lastAttempt = isoDate(new Date());
+  if(margin >= 1){
+    bs.breached = true; bs.lastWon = true; bs.lastMargin = margin;
+    const q = margin>=1.4 ? "DECISIVE VICTORY" : margin>=1.15 ? "SOLID VICTORY" : "NARROW VICTORY";
+    toast("Λ "+q+" — their lines are broken. Finish it in the real world.");
+  } else {
+    bs.lastWon = false; bs.lastMargin = margin;
+    state.regroup = { until: isoDate(new Date(Date.now()+W.regroup.days*86400000)), reason: badgeName };
+    toast("Repelled. Regroup: -"+W.regroup.penalty+" readiness for "+W.regroup.days+" days.");
+  }
+  state.bosses[badgeId]=bs;
+  save(); renderAll();
+}
+
+/* ---- spending ---- */
+function spendReinforce(domainId){
+  const cost = W.reinforceCost;
+  if(balance(domainId)<cost) return;
+  state.army.spent[domainId]+=cost;
+  state.army.troops[domainId]=(state.army.troops[domainId]||0)+1;
+  save(); renderAll(); flashUnit(domainId);
+}
+function upgradeCost(domainId){
+  const t = tierOf(domainId);
+  if(t>=W.tierNames.length-1) return null;
+  let c = W.tierCosts[t+1];
+  if(hasResearch("veteran-doctrine")) c = Math.round(c*0.75);
+  return c;
+}
+function spendUpgrade(domainId){
+  const cost = upgradeCost(domainId);
+  if(cost===null || balance(domainId)<cost) return;
+  state.army.spent[domainId]+=cost;
+  state.army.tiers[domainId]=tierOf(domainId)+1;
+  save(); renderAll(); flashUnit(domainId);
+  toast(domainName(domainId)+" "+W.unitNames[domainId]+" — now "+W.tierNames[tierOf(domainId)]);
+}
+function buyResearch(id){
+  const node = W.research.find(r=>r.id===id);
+  if(!node || hasResearch(id)) return;
+  if(node.requiresBadge){
+    const st = state.badges[node.requiresBadge];
+    if(!st || st.status!=="achieved") return;
+  }
+  for(const [dom,c] of Object.entries(node.cost)){ if(balance(dom)<c) { toast("Can't afford "+node.name); return; } }
+  for(const [dom,c] of Object.entries(node.cost)){ state.army.spent[dom]+=c; }
+  state.research.push(id);
+  save(); renderAll();
+  toast("Research complete — "+node.name);
+}
+function domainName(id){ const d=CONFIG.domains.find(d=>d.id===id); return d?d.name:id; }
+
+/* =====================================================================
    UI
    ===================================================================== */
 const $ = id => document.getElementById(id);
 function isoDate(d){ return d.toISOString().slice(0,10); }
 
+/* ---------- tabs ---------- */
+const TABS = ["war","log","armory","research"];
+function switchTab(name){
+  for(const t of TABS){
+    $("tab-"+t).classList.toggle("active", t===name);
+    $("tabBtn-"+t).classList.toggle("active", t===name);
+  }
+  renderAll(); // recompute on tab navigation, matching load behavior
+}
+for(const t of TABS){ $("tabBtn-"+t).onclick = ()=>switchTab(t); }
+
+/* ---------- header ---------- */
 function initTicks(){
   const g = $("ticks");
   for(let i=0;i<24;i++){
@@ -401,6 +858,300 @@ function renderHeader(){
   const pips = $("pips"); pips.innerHTML="";
   for(let i=0;i<7;i++){ const p=document.createElement("i"); if(i<n)p.classList.add("on"); pips.appendChild(p); }
 }
+
+/* ---------- war room: campaign ---------- */
+function renderCampaign(){
+  const box = $("campaignBox"); box.innerHTML="";
+  const c = state.campaign;
+  const enemy = enemyById(c.enemyId);
+  const wkEnd = new Date(c.weekStart+"T12:00:00"); wkEnd.setDate(wkEnd.getDate()+6);
+
+  const head = document.createElement("div"); head.className="campaign-head";
+  const left = document.createElement("div");
+  left.innerHTML = `<div class="wk">Week of ${c.weekStart} — ${isoDate(wkEnd)}</div>
+    <div class="foe">${c.confirmed?"":"Scouts report: "}${enemy.name}</div>
+    <div class="flavor">${enemy.flavor}</div>`;
+  head.appendChild(left);
+  box.appendChild(head);
+
+  if(!c.confirmed){
+    const row = document.createElement("div"); row.className="suggest-row";
+    const sel = document.createElement("select");
+    for(const e of W.enemies){
+      const o=document.createElement("option"); o.value=e.id; o.textContent=e.name;
+      if(e.id===c.enemyId) o.selected=true; sel.appendChild(o);
+    }
+    sel.onchange = ()=>{ c.enemyId=sel.value; save(); renderAll(); };
+    const btn = document.createElement("button"); btn.className="btn-war"; btn.textContent="Confirm campaign";
+    btn.onclick = ()=>{ c.confirmed=true; save(); renderAll(); toast("Campaign confirmed — "+enemyById(c.enemyId).name); };
+    const note = document.createElement("span"); note.style.cssText="font-size:11px";
+    note.textContent = "Suggested from your recent activity. Confirm, or choose another foe.";
+    row.appendChild(sel); row.appendChild(btn); row.appendChild(note);
+    box.appendChild(row);
+  } else {
+    const fog = document.createElement("div"); fog.className="fog";
+    if(c.revealed){
+      let txt = `<span class="revealed">EXPLOIT VECTOR: they target your ${domainName(c.exploit)}`+
+        (readinessOf(c.exploit)<W.exploitThreshold?` — and it's working (+${Math.round(W.exploitBonus*100)}% enemy force)`:" — but you're holding")+`</span>`;
+      if(c.strengthKnown){ const {E}=pushPosition(); txt += `<span class="revealed">EST. STRENGTH: ${Math.round(E)}</span>`; }
+      fog.innerHTML = txt;
+    } else {
+      fog.innerHTML = `<span class="veil">Their exploit vector is hidden in the fog of war.</span>`;
+      const rec = document.createElement("button"); rec.className="btn-ghost";
+      rec.textContent = `Recon — ${reconCostNow()} Intel`;
+      rec.disabled = balance("cyber")<reconCostNow();
+      rec.onclick = doRecon;
+      fog.appendChild(rec);
+    }
+    box.appendChild(fog);
+  }
+
+  if(state.lastResult){
+    const r = state.lastResult;
+    const el = document.createElement("div");
+    el.className = "last-result "+(r.won?"won":"lost");
+    el.textContent = r.won
+      ? `LAST WEEK: ${r.name} — LINE HELD at ${r.pos}%. Spoils banked.`
+      : `LAST WEEK: ${r.name} — they held at ${r.pos}%. No losses. The line reforms.`;
+    box.appendChild(el);
+  }
+  if(regroupActive()){
+    const el = document.createElement("div");
+    el.className="last-result lost";
+    el.textContent = `REGROUPING after ${state.regroup.reason} — readiness -${W.regroup.penalty} until ${state.regroup.until}.`;
+    box.appendChild(el);
+  }
+}
+
+/* ---------- war room: push line ---------- */
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs){
+  const el = document.createElementNS(SVG_NS, tag);
+  for(const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+  return el;
+}
+function renderPushLine(){
+  const svg = $("pushSvg"); svg.innerHTML="";
+  const meta = $("pushMeta"); meta.innerHTML="";
+  const note = $("standoffNote");
+  const c = state.campaign;
+  const {pos, P, E, exploitActive} = pushPosition();
+  const Wd=700, Hd=150, ground=128;
+
+  // ground line
+  svg.appendChild(svgEl("line",{x1:0,y1:ground,x2:Wd,y2:ground,stroke:"var(--rivet)","stroke-width":2}));
+
+  const confirmed = c && c.confirmed;
+  const contactX = confirmed ? pos*Wd : Wd/2;
+
+  // ranks are laid out relative to contact x=0, then the group translates
+  const gPlayer = svgEl("g",{class:"mv"});
+  const gEnemy  = svgEl("g",{class:"mv"});
+  const gLine   = svgEl("g",{class:"mv"});
+
+  const troopsTotal = armySizeTotal();
+  const pCols = Math.max(2, Math.min(14, Math.round(troopsTotal/3)));
+  const ratio = confirmed && E ? E/P : 1;
+  const eCols = Math.max(2, Math.min(14, Math.round(pCols*ratio)));
+  const rows=3, colW=16, rowH=26, topY=ground-rows*rowH+6;
+
+  for(let cix=0;cix<pCols;cix++){
+    for(let r=0;r<rows;r++){
+      const x = -14 - cix*colW, y = topY + r*rowH + (cix%2?7:0);
+      gPlayer.appendChild(svgEl("polygon",{
+        points:`${x-10},${y} ${x-10},${y+16} ${x+2},${y+8}`,
+        fill:"var(--bronze)", opacity: Math.max(.35, 1-cix*.05),
+      }));
+      gPlayer.appendChild(svgEl("line",{x1:x-10,y1:y+2,x2:x+8,y2:y+8,stroke:"var(--bone)","stroke-width":1,opacity:.5}));
+    }
+  }
+  for(let cix=0;cix<eCols;cix++){
+    for(let r=0;r<rows;r++){
+      const x = 14 + cix*colW, y = topY + r*rowH + (cix%2?7:0);
+      gEnemy.appendChild(svgEl("polygon",{
+        points:`${x+10},${y} ${x+10},${y+16} ${x-2},${y+8}`,
+        fill:"#8E2A22", opacity: Math.max(.35, 1-cix*.05),
+      }));
+      gEnemy.appendChild(svgEl("line",{x1:x+10,y1:y+2,x2:x-8,y2:y+8,stroke:"#c4544a","stroke-width":1,opacity:.5}));
+    }
+  }
+  gLine.appendChild(svgEl("line",{x1:0,y1:12,x2:0,y2:ground,stroke:"var(--bone)","stroke-width":1.5,"stroke-dasharray":"4 4",opacity:.8}));
+  gLine.appendChild(svgEl("polygon",{points:"-6,4 6,4 0,14",fill:"var(--bone)",opacity:.8}));
+
+  svg.appendChild(gPlayer); svg.appendChild(gEnemy); svg.appendChild(gLine);
+
+  // ease from center to position (skipped automatically under reduced motion)
+  const setX = px => { for(const g of [gPlayer,gEnemy,gLine]) g.style.transform=`translateX(${px}px)`; };
+  setX(Wd/2);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>setX(contactX)));
+
+  if(confirmed){
+    note.style.display="none";
+    const pctP = Math.round(pos*100);
+    meta.innerHTML = `<span class="p">YOUR LINE — force ${Math.round(P)} · holding ${pctP}% of the field</span>
+      <span class="e">${enemyById(c.enemyId).name}${exploitActive && c.revealed?" · EXPLOITING":""}${c.strengthKnown?` · force ${Math.round(E)}`:""}</span>`;
+  } else {
+    note.style.display="block";
+    note.textContent = "Standoff — confirm this week's campaign to engage.";
+    meta.innerHTML = `<span class="p">YOUR LINE — force ${Math.round(P)}</span><span class="e">AWAITING ORDERS</span>`;
+  }
+}
+
+/* ---------- war room: summary + units ---------- */
+function renderWarSummary(){
+  const host = $("warSummary"); host.innerHTML="";
+  const stats = [
+    [armySizeTotal(), "Army size"],
+    [armyReadiness()+"%", "Readiness"],
+    [W.tierNames[Math.min(...domainIds().map(tierOf))]+"+", "Lowest tier"],
+  ];
+  for(const [v,l] of stats){
+    const el=document.createElement("div"); el.className="stat";
+    el.innerHTML=`<b class="mono">${v}</b><span>${l}</span>`;
+    host.appendChild(el);
+  }
+  const row = document.createElement("div"); row.className="formation-row";
+  const lbl = document.createElement("span"); lbl.style.cssText="font-size:11px;text-transform:uppercase;letter-spacing:.1em";
+  lbl.textContent="Formation:"; row.appendChild(lbl);
+  const wall = document.createElement("button"); wall.className="btn-ghost"+(state.formation==="wall"?" sel":""); wall.textContent="Wall";
+  wall.onclick=()=>{ state.formation="wall"; save(); renderAll(); };
+  row.appendChild(wall);
+  if(hasResearch("wedge")){
+    const wg = document.createElement("button"); wg.className="btn-ghost"+(state.formation==="wedge"?" sel":""); wg.textContent="Wedge";
+    wg.onclick=()=>{ state.formation="wedge"; save(); renderAll(); };
+    row.appendChild(wg);
+  }
+  host.appendChild(row);
+}
+function flashUnit(domainId){
+  const el = document.getElementById("unit-"+domainId);
+  if(el){ el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+}
+function renderUnits(){
+  const host = $("units"); host.innerHTML="";
+  for(const d of CONFIG.domains){
+    const id=d.id, t=tierOf(id), r=readinessOf(id), bal=balance(id);
+    const uc = upgradeCost(id);
+    const el = document.createElement("div"); el.className="unit"; el.id="unit-"+id;
+    el.innerHTML = `
+      <div class="u-head"><b>${W.unitNames[id]}</b><span class="tier t${t}">${W.tierNames[t]}</span></div>
+      <div class="u-stats">
+        ${state.army.troops[id]||0} troops · fed by ${d.name}<br>
+        <span class="cur">${bal} ${W.currencies[id]}</span> in reserve
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;font-family:'JetBrains Mono',monospace">
+        <span>READINESS</span><span>${r}%</span>
+      </div>
+      <div class="readiness-bar"><i class="${r<W.exploitThreshold?"low":""}" style="width:${r}%"></i></div>`;
+    const acts = document.createElement("div"); acts.className="u-actions";
+    const b1 = document.createElement("button"); b1.className="btn-ghost";
+    b1.textContent = `Reinforce +1 (${W.reinforceCost})`;
+    b1.disabled = bal < W.reinforceCost;
+    b1.onclick = ()=>spendReinforce(id);
+    acts.appendChild(b1);
+    const b2 = document.createElement("button"); b2.className="btn-ghost";
+    if(uc===null){ b2.textContent="Elite — max"; b2.disabled=true; }
+    else { b2.textContent=`${W.tierNames[t+1]} (${uc})`; b2.disabled = bal<uc; }
+    b2.onclick = ()=>spendUpgrade(id);
+    acts.appendChild(b2);
+    el.appendChild(acts);
+    host.appendChild(el);
+  }
+}
+
+/* ---------- armory (badges + boss strips) ---------- */
+function renderArmory(){
+  const host = $("armory"); host.innerHTML="";
+  const groups = [...new Set(CONFIG.badges.map(b=>b.group))];
+  for(const g of groups){
+    const wrap = document.createElement("div"); wrap.className="badge-group";
+    wrap.innerHTML = `<h3>${g}</h3>`;
+    const grid = document.createElement("div"); grid.className="badges";
+    for(const b of CONFIG.badges.filter(b=>b.group===g)){
+      const st = state.badges[b.id] || { status:"planned", date:null };
+      const el = document.createElement("div");
+      el.className = "badge "+st.status;
+      el.setAttribute("role","button"); el.setAttribute("tabindex","0");
+      el.innerHTML = `<div class="name">${b.name}</div>
+        <div class="meta">${st.status.replace("-"," ")}${st.date? " · "+st.date : ""}</div>`;
+      const cycle = ()=>{
+        const idx = BADGE_STATUSES.indexOf(st.status);
+        const next = BADGE_STATUSES[(idx+1)%BADGE_STATUSES.length];
+        if(next==="achieved"){
+          if(!confirm(`Mark "${b.name}" as ACTUALLY achieved? Only confirm if it's real.`)) return;
+          state.badges[b.id] = { status:"achieved", date:isoDate(new Date()) };
+          toast("Λ  "+b.name+" — earned"+(isBossBadge(b)?". The siege is over.":""));
+        } else {
+          state.badges[b.id] = { status:next, date:null };
+        }
+        save(); renderAll();
+      };
+      el.onclick = cycle;
+      el.onkeydown = ev=>{ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); cycle(); } };
+
+      // boss strip: only for in-progress badges in boss groups
+      if(isBossBadge(b) && st.status==="in-progress"){
+        const bs = bossState(b.id);
+        const need = bossForce(b.id);
+        let P = playerForce(null); if(hasResearch("siege-works")) P*=(1+W.boss.siegeBonus);
+        const cd = bossCooldownUntil(bs);
+        const onCd = cd && new Date()<cd;
+        const strip = document.createElement("div"); strip.className="boss-strip";
+        let lines = `<span class="b-title">⚔ ACTIVE SIEGE</span><br>walls ${need} · your force ${Math.round(P)} `;
+        lines += P>=need ? `<span class="ok">— breach possible</span>` : `<span class="warn">— under-prepared</span>`;
+        if(bs.attempts) lines += `<br>attempts ${bs.attempts}${bs.breached?` · <span class="ok">lines broken — finish it for real</span>`:""}`;
+        if(onCd) lines += `<br><span class="warn">regrouping until ${isoDate(cd)}</span>`;
+        strip.innerHTML = lines;
+        if(!bs.breached){
+          const atk = document.createElement("button"); atk.className="btn-war";
+          atk.textContent = onCd ? "Regrouping…" : "Assault";
+          atk.disabled = onCd;
+          atk.onclick = ev=>{ ev.stopPropagation(); attemptBoss(b.id, b.name); };
+          strip.appendChild(atk);
+        }
+        strip.onclick = ev=>ev.stopPropagation();
+        el.appendChild(strip);
+      }
+      grid.appendChild(el);
+    }
+    wrap.appendChild(grid); host.appendChild(wrap);
+  }
+}
+
+/* ---------- research ---------- */
+function renderResearch(){
+  const host = $("research"); host.innerHTML="";
+  for(const node of W.research){
+    const owned = hasResearch(node.id);
+    let gated=false, gateName="";
+    if(node.requiresBadge){
+      const st = state.badges[node.requiresBadge];
+      if(!st || st.status!=="achieved"){
+        gated=true;
+        const b = CONFIG.badges.find(b=>b.id===node.requiresBadge);
+        gateName = b?b.name:node.requiresBadge;
+      }
+    }
+    const costTxt = Object.entries(node.cost).map(([d,c])=>`${c} ${W.currencies[d]}`).join(" + ");
+    const affordable = Object.entries(node.cost).every(([d,c])=>balance(d)>=c);
+    const el = document.createElement("div");
+    el.className = "rnode"+(owned?" owned":gated?" locked":"");
+    el.innerHTML = `<div class="r-name">${node.name}</div>
+      <div class="r-desc">${node.desc}</div>
+      <div class="r-cost">${owned?"RESEARCHED":costTxt}</div>
+      ${gated?`<div class="r-gate">⌀ requires: ${gateName} (achieved)</div>`:""}`;
+    if(!owned){
+      const btn = document.createElement("button"); btn.className="btn-ghost";
+      btn.textContent = gated ? "Locked" : "Research";
+      btn.disabled = gated || !affordable;
+      btn.onclick = ()=>buyResearch(node.id);
+      el.appendChild(btn);
+    }
+    host.appendChild(el);
+  }
+}
+
+/* ---------- log tab (preserved from v1) ---------- */
 function renderDomains(){
   const today = isoDate(new Date());
   const host = $("domains"); host.innerHTML="";
@@ -427,39 +1178,6 @@ function renderLog(){
     const del = document.createElement("button"); del.textContent="✕"; del.title="Delete entry";
     del.onclick = ()=>{ if(confirm("Delete this entry?")){ state.log = state.log.filter(x=>x.ts!==e.ts); save(); renderAll(); } };
     li.appendChild(del); ul.appendChild(li);
-  }
-}
-function renderArmory(){
-  const host = $("armory"); host.innerHTML="";
-  const groups = [...new Set(CONFIG.badges.map(b=>b.group))];
-  for(const g of groups){
-    const wrap = document.createElement("div"); wrap.className="badge-group";
-    wrap.innerHTML = `<h3>${g}</h3>`;
-    const grid = document.createElement("div"); grid.className="badges";
-    for(const b of CONFIG.badges.filter(b=>b.group===g)){
-      const st = state.badges[b.id] || { status:"planned", date:null };
-      const el = document.createElement("div");
-      el.className = "badge "+st.status;
-      el.setAttribute("role","button"); el.setAttribute("tabindex","0");
-      el.innerHTML = `<div class="name">${b.name}</div>
-        <div class="meta">${st.status.replace("-"," ")}${st.date? " · "+st.date : ""}</div>`;
-      const cycle = ()=>{
-        const idx = BADGE_STATUSES.indexOf(st.status);
-        const next = BADGE_STATUSES[(idx+1)%BADGE_STATUSES.length];
-        if(next==="achieved"){
-          if(!confirm(`Mark "${b.name}" as ACTUALLY achieved? Only confirm if it's real.`)) return;
-          state.badges[b.id] = { status:"achieved", date:isoDate(new Date()) };
-          toast("Λ  "+b.name+" — earned");
-        } else {
-          state.badges[b.id] = { status:next, date:null };
-        }
-        save(); renderArmory();
-      };
-      el.onclick = cycle;
-      el.onkeydown = ev=>{ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); cycle(); } };
-      grid.appendChild(el);
-    }
-    wrap.appendChild(grid); host.appendChild(wrap);
   }
 }
 function renderForm(){
@@ -508,7 +1226,7 @@ function logEntry(){
   else toast("+"+res.awarded+" XP");
 }
 
-/* ---------- export / import ---------- */
+/* ---------- export / import (migrates incoming files) ---------- */
 function exportData(){
   const blob = new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
   const a = document.createElement("a");
@@ -524,7 +1242,7 @@ function importData(file){
       if(!incoming.log || !incoming.badges) throw new Error("not a phalanx file");
       const ok = confirm(
         `Replace current data?\n\nLocal:    ${state.lastModified||"(empty)"} — ${state.log.length} entries\nIncoming: ${incoming.lastModified} — ${incoming.log.length} entries\n\nOK = use incoming file. Cancel = keep local.`);
-      if(ok){ state = incoming; save(); renderAll(); toast("Imported"); }
+      if(ok){ state = migrate(incoming); save(); ensureCampaign(); renderAll(); toast("Imported"); }
     }catch(e){ alert("Import failed: "+e.message); }
   };
   r.readAsText(file);
@@ -533,17 +1251,22 @@ function importData(file){
 /* ---------- misc ---------- */
 function toast(msg){
   const t=$("toast"); t.textContent=msg; t.style.display="block";
-  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none", 2600);
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none", 3000);
 }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function renderAll(){ renderHeader(); renderDomains(); renderLog(); renderArmory(); }
+function renderAll(){
+  renderHeader();
+  renderCampaign(); renderWarSummary(); renderPushLine(); renderUnits();
+  renderDomains(); renderLog();
+  renderArmory(); renderResearch();
+}
 
 $("logBtn").onclick = logEntry;
 $("exportBtn").onclick = exportData;
 $("importBtn").onclick = ()=>$("importFile").click();
 $("importFile").onchange = e=>{ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=""; };
 
-initTicks(); renderForm(); renderAll();
+initTicks(); ensureCampaign(); renderForm(); renderAll();
 </script>
 </body>
 </html>
