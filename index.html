@@ -388,7 +388,7 @@ const CONFIG = {
       { id:"htb-insane",  name:"HTB box — Insane (rooted)", xp:400 },
       { id:"box-stage",   name:"Box stage cleared (recon/enum/foothold/privesc/loot)", xp:15 },
       { id:"new-tech",    name:"New technique or CVE applied (first time)", xp:40 },
-      { id:"notes",       name:"Session notes written up",  xp:20 },
+      { id:"notes",       name:"Session notes written up",  xp:50 },
       { id:"bounty-sub",  name:"Bug bounty submission filed", xp:100 },
     ]},
     { id:"unity", name:"Game Dev", dailyCap:240, activities:[
@@ -399,13 +399,14 @@ const CONFIG = {
       { id:"devlog",   name:"Devlog entry published",     xp:30 },
     ]},
     { id:"course", name:"Coursework", dailyCap:240, activities:[
+      {id:"video",     name:"Video lecture watched",          xp:10 },
       { id:"study",    name:"Study session",              xp:30 },
       { id:"pset",     name:"Problem set completed",      xp:50 },
       { id:"concept",  name:"New concept mastered",       xp:40 },
       { id:"exam",     name:"Exam taken",                 xp:100 },
     ]},
     { id:"body", name:"Calisthenics", dailyCap:120, activities:[
-      { id:"train",    name:"Training session",           xp:40 },
+      { id:"workout",    name:"Workout session",           xp:40 },
       { id:"skill",    name:"Skill progression work",     xp:20 },
       { id:"volume",   name:"Extra volume logged",        xp:10 },
     ]},
@@ -415,11 +416,13 @@ const CONFIG = {
     { id:"cert-google", group:"Certifications", name:"Google Cybersecurity (Coursera)" },
     { id:"cert-sql",    group:"Certifications", name:"SQL Certification" },
     { id:"cert-anthropic", group:"Certifications", name:"Anthropic AI Fluency Foundations" },
+    { id:"cert-htb",    group:"Certifications", name:"HTB Junior Cybersecurity Analyst"},
     { id:"cert-secplus", group:"Certifications", name:"CompTIA Security+" },
     { id:"cert-cissp",  group:"Certifications", name:"CISSP" },
     { id:"cert-ceh",    group:"Certifications", name:"CEH" },
     { id:"cert-oscp",   group:"Certifications", name:"OSCP" },
     // --- career milestones ---
+    {id:"car-intern", group:"Career", name:"First pentesting internship" },
     { id:"car-sub",    group:"Career", name:"First accepted bounty submission" },
     { id:"car-payout", group:"Career", name:"First paid bounty payout" },
     { id:"car-income", group:"Career", name:"Bounty income — recurring" },
