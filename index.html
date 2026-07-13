@@ -1316,7 +1316,18 @@ function domainName(id){ const d=CONFIG.domains.find(d=>d.id===id); return d?d.n
    UI
    ===================================================================== */
 const $ = id => document.getElementById(id);
-function isoDate(d){ return d.toISOString().slice(0,10); }
+function isoDate(d){
+  // Local calendar date, NOT UTC. toISOString() converts to UTC first, which
+  // silently rolls the date forward on any evening load in a UTC-behind
+  // timezone (e.g. 9pm Central becomes 2am UTC the next day) — that mismatch
+  // is what was tearing down the weekly campaign on reload. Every date in the
+  // app (log entries, week starts, badge dates, boss cooldowns) flows through
+  // this one function, so fixing it here fixes all of them at once.
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
 
 /* ---------- tabs ---------- */
 const TABS = ["war","log","armory","research","bosses"];
