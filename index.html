@@ -1546,21 +1546,26 @@ function nodeClassOf(node){
 }
 function researchPositions(){
   const order = Object.keys(W.researchBranches);          // krypteia(top), agoge(right), gymnasion(bottom-right), poliorcetics(bottom-left), ephorate(left)
-  const radii = [260, 500, 660];                          // tier -> base distance from branch anchor (wider rings, less crowding)
-  const stepDeg = { 1:30, 2:22, 3:22 };                    // wider fan per tier — tier 1 sits nearest center so it needs the most room
+  const radii = [260, 500, 660];                          // tier -> base distance from branch anchor
+  const stepDeg = { 1:30, 2:16, 3:18 };                    // tier 1 (center) stays wide to clear the central pile-up;
+                                                             // tiers 2-3 (exterior) reverted to their tighter, original spacing
   // Krypteia (top) stays close in; the bottom pair and the side pair push further
   // out along their own angle so each cluster clears the central pile-up.
   const radiusMult = { krypteia:1.0, agoge:1.55, gymnasion:1.65, poliorcetics:1.65, ephorate:1.55 };
+  // Bottom two branches (Gymnasion, Poliorcetics) get nudged straight down by just
+  // over one node's diameter (44px) so their labels clear the neighboring branch's nodes.
+  const branchShiftY = { gymnasion:60, poliorcetics:60 };
   const pos = {};
   order.forEach((branch, bi)=>{
     const baseA = (-90 + bi*(360/order.length)) * Math.PI/180;
     const mult = radiusMult[branch] || 1;
+    const shiftY = branchShiftY[branch] || 0;
     for(const t of [1,2,3]){
       const nodes = W.research.filter(r=>r.branch===branch && r.tier===t);
       nodes.forEach((n, i)=>{
         const off = (i - (nodes.length-1)/2) * stepDeg[t] * Math.PI/180;
         const a = baseA + off, r = radii[t-1]*mult;
-        pos[n.id] = { x: Math.round(r*Math.cos(a)), y: Math.round(r*Math.sin(a)) };
+        pos[n.id] = { x: Math.round(r*Math.cos(a)), y: Math.round(r*Math.sin(a) + shiftY) };
       });
     }
   });
@@ -1590,7 +1595,7 @@ function initResearchGraph(){
     container: box,
     elements: researchElements(),
     layout: { name:"preset" },
-    minZoom: 0.25, maxZoom: 2.5, wheelSensitivity: 1.0,
+    minZoom: 0.5, maxZoom: 2.5, wheelSensitivity: 1.5,
     autoungrabify: true, boxSelectionEnabled: false,
     style: [
       { selector:"node", style:{
