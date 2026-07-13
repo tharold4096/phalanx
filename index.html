@@ -34,11 +34,23 @@
       achievement stays fully manual.
     - Research: cross-cutting unlocks. Some gated behind real achieved badges.
 
-  DATA: localStorage (phalanx-save-v1 key kept for continuity), schema version 2.
-  v1 saves migrate automatically. Export/import unchanged (import confirms,
+  RESEARCH TREE (v3):
+    - Five branches (The Krypteia / Agoge / Gymnasion / Poliorcetics / Ephorate),
+      40 nodes, rendered as a pannable/zoomable Cytoscape.js graph in the
+      Research tab. Gate schema: requiresNodes (AND) + requiresLevel +
+      requiresBadges (all / any / countAtLeast). Badge gates only ever READ
+      badge status — prestige stays manual, sacred core untouched.
+    - v2 research ids migrate: direct successors are granted
+      (field-scouts -> krypteia-helot-watch, siege-works -> poliorcetics-helepolis,
+      wedge -> ephorate-wedge-formation); nodes with no successor are refunded
+      in full to currency bonuses. Nothing is ever just taken away.
+
+  DATA: localStorage (phalanx-save-v1 key kept for continuity), schema version 3.
+  v1/v2 saves migrate automatically. Export/import unchanged (import confirms,
   never silently overwrites, and migrates incoming files too).
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.33.2/cytoscape.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -224,17 +236,38 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .formation-row{display:flex;gap:8px;align-items:center;margin-left:auto}
 .formation-row button.sel{border-color:var(--bronze);color:var(--bronze)}
 
-/* ---------- research ---------- */
-.research-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.rnode{border:1px solid var(--rivet);border-radius:4px;background:var(--iron);padding:12px}
-.rnode .r-name{font-family:'Chakra Petch',sans-serif;color:var(--bone);font-size:13px;letter-spacing:.05em}
-.rnode .r-desc{font-size:12px;margin:6px 0 8px;line-height:1.5}
-.rnode .r-cost{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--bronze)}
-.rnode .r-gate{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--blood);margin-top:4px}
-.rnode button{width:100%;margin-top:10px}
-.rnode.owned{border-color:var(--moss);background:rgba(111,143,94,.08)}
-.rnode.owned .r-name::before{content:"Λ ";color:var(--moss)}
-.rnode.locked{opacity:.65}
+/* ---------- research (Cytoscape tree) ---------- */
+.cy-hint{font-size:10px;color:var(--ash);letter-spacing:.06em;text-transform:none;float:right;font-family:'JetBrains Mono',monospace}
+.cy-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.cy-legend span{display:flex;align-items:center;gap:6px}
+.cy-legend i{width:12px;height:12px;border-radius:50%;display:block;background:var(--iron)}
+.cy-legend .lk i{border:2px solid var(--rivet);opacity:.5}
+.cy-legend .av i{border:2px solid var(--bronze)}
+.cy-legend .ow i{border:2px solid var(--moss);background:rgba(111,143,94,.35)}
+#cy{height:560px;border:1px solid var(--rivet);border-radius:4px;background:var(--iron);touch-action:none}
+@media(max-width:600px){#cy{height:420px}}
+.rdetail{margin-top:14px;border:1px solid var(--rivet);border-radius:4px;background:var(--iron);padding:14px;min-height:64px}
+.rdetail .rd-branch{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--bronze)}
+.rdetail .rd-name{font-family:'Chakra Petch',sans-serif;color:var(--bone);font-size:16px;letter-spacing:.05em;margin:3px 0 6px}
+.rdetail .rd-name.owned::before{content:"Λ ";color:var(--moss)}
+.rdetail .rd-desc{font-size:12px;line-height:1.55;max-width:640px}
+.rdetail .rd-cost{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--bronze);margin-top:8px;letter-spacing:.05em}
+.rdetail .rd-gates{font-family:'JetBrains Mono',monospace;font-size:10px;margin-top:6px;line-height:1.9}
+.rdetail .rd-gates .ok{color:var(--moss)}
+.rdetail .rd-gates .no{color:var(--blood)}
+.rdetail .rd-actions{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.rdetail .rd-actions select{width:auto;min-width:170px}
+.rdetail .rd-idle{font-size:12px;color:var(--ash)}
+/* fallback flat list (only if the Cytoscape CDN is unreachable) */
+.rfallback{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:12px;max-height:520px;overflow-y:auto}
+.rfallback .rnode{border:1px solid var(--rivet);border-radius:4px;background:var(--steel);padding:9px 11px;cursor:pointer;font-size:12px;color:var(--bone)}
+.rfallback .rnode small{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ash);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.rfallback .rnode.owned{border-color:var(--moss)}
+.rfallback .rnode.available{border-color:var(--bronze)}
+.rfallback .rnode.locked{opacity:.55}
+/* cosmetic banners */
+.banner-chip{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--bronze);color:var(--bronze);border-radius:2px;padding:3px 8px}
 
 /* ---------- data bar ---------- */
 .data-bar{display:flex;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}
@@ -352,8 +385,15 @@ button:disabled{opacity:.4;cursor:not-allowed}
 <!-- ============ RESEARCH ============ -->
 <section class="tab" id="tab-research">
   <div class="panel">
-    <h2>Research <span class="accent">//</span> Doctrine &amp; Unlocks</h2>
-    <div class="research-grid" id="research"></div>
+    <h2>Research <span class="accent">//</span> The Five Councils
+      <span class="cy-hint">scroll to zoom · drag to pan · tap a node</span></h2>
+    <div class="cy-legend">
+      <span class="lk"><i></i>locked</span>
+      <span class="av"><i></i>available</span>
+      <span class="ow"><i></i>owned</span>
+    </div>
+    <div id="cy"></div>
+    <div class="rdetail" id="researchDetail"></div>
   </div>
 </section>
 
@@ -388,7 +428,7 @@ const CONFIG = {
       { id:"htb-insane",  name:"HTB box — Insane (rooted)", xp:400 },
       { id:"box-stage",   name:"Box stage cleared (recon/enum/foothold/privesc/loot)", xp:15 },
       { id:"new-tech",    name:"New technique or CVE applied (first time)", xp:40 },
-      { id:"notes",       name:"Session notes written up",  xp:20 },
+      { id:"notes",       name:"Session notes written up",  xp:50 },
       { id:"bounty-sub",  name:"Bug bounty submission filed", xp:100 },
     ]},
     { id:"unity", name:"Game Dev", dailyCap:240, activities:[
@@ -399,13 +439,14 @@ const CONFIG = {
       { id:"devlog",   name:"Devlog entry published",     xp:30 },
     ]},
     { id:"course", name:"Coursework", dailyCap:240, activities:[
+      {id:"video",     name:"Video lecture watched",          xp:10 },
       { id:"study",    name:"Study session",              xp:30 },
       { id:"pset",     name:"Problem set completed",      xp:50 },
       { id:"concept",  name:"New concept mastered",       xp:40 },
       { id:"exam",     name:"Exam taken",                 xp:100 },
     ]},
     { id:"body", name:"Calisthenics", dailyCap:120, activities:[
-      { id:"train",    name:"Training session",           xp:40 },
+      { id:"workout",    name:"Workout session",           xp:40 },
       { id:"skill",    name:"Skill progression work",     xp:20 },
       { id:"volume",   name:"Extra volume logged",        xp:10 },
     ]},
@@ -415,11 +456,13 @@ const CONFIG = {
     { id:"cert-google", group:"Certifications", name:"Google Cybersecurity (Coursera)" },
     { id:"cert-sql",    group:"Certifications", name:"SQL Certification" },
     { id:"cert-anthropic", group:"Certifications", name:"Anthropic AI Fluency Foundations" },
+    { id:"cert-htb",    group:"Certifications", name:"HTB Junior Cybersecurity Analyst"},
     { id:"cert-secplus", group:"Certifications", name:"CompTIA Security+" },
     { id:"cert-cissp",  group:"Certifications", name:"CISSP" },
     { id:"cert-ceh",    group:"Certifications", name:"CEH" },
     { id:"cert-oscp",   group:"Certifications", name:"OSCP" },
     // --- career milestones ---
+    {id:"car-intern", group:"Career", name:"First pentesting internship" },
     { id:"car-sub",    group:"Career", name:"First accepted bounty submission" },
     { id:"car-payout", group:"Career", name:"First paid bounty payout" },
     { id:"car-income", group:"Career", name:"Bounty income — recurring" },
@@ -453,7 +496,11 @@ const CONFIG = {
     pushK: { wall: 1.6, wedge: 2.6 },  // wall dampens swings, wedge amplifies them
     skirmishReward: { all: 25, focusExtra: 25 },  // currency banked on a win
     regroup: { penalty: 15, days: 3 }, // temporary readiness dip + cooldown after a lost assault
-    boss: { base: 100, exponent: 1.5, siegeBonus: 0.10 },
+    boss: {
+      base: 100, exponent: 1.5,
+      helepolisBonus: 0.15,                       // Poliorcetics: Helepolis — +force in boss assaults
+      sanction: { cost: 60, bonus: 0.15 },        // Krypteia: The Sanction — Intel for a weak point, one fight
+    },
     bossGroups: ["Certifications","Career"],
     bossTiers: {
       "cert-google":1, "cert-sql":1, "cert-anthropic":1, "cert-secplus":2,
@@ -469,13 +516,145 @@ const CONFIG = {
       { id:"veil",      name:"The Veiled Court",     flavor:"Feints and misdirection. Intelligence wins here.",                focus:"cyber",  difficulty:0.85 },
     ],
     focusWeight: 1.5,                  // campaign-focus domain force multiplier
+
+    /* ===== RESEARCH TREE (v3) =====
+       Five branches, 8 nodes each, 3 tiers. Gate schema:
+         gate: {
+           requiresNodes: [ids]           — ALL must be owned
+           requiresLevel: n | null        — character level >= n
+           requiresBadges:                — at most one of:
+             { all:[ids] }                — every one achieved
+             { any:[ids] }                — at least one achieved
+             { countAtLeast:{ids|group, count} } — at least N achieved
+         }
+       Badge gates only READ status — never award, never punish.        */
+    researchBranches: {
+      krypteia:     { name:"The Krypteia",     sub:"Cybersecurity" },
+      agoge:        { name:"The Agoge",        sub:"Coursework" },
+      gymnasion:    { name:"The Gymnasion",    sub:"Calisthenics" },
+      poliorcetics: { name:"The Poliorcetics", sub:"Game Dev" },
+      ephorate:     { name:"The Ephorate",     sub:"High Command" },
+    },
     research: [
-      { id:"field-scouts",     name:"Field Scouts",     desc:"Forward observers halve the Intel cost of recon.",                       cost:{cyber:120} },
-      { id:"fortifications",   name:"Fortifications",   desc:"+10 readiness floor for every domain — a buffer for busy weeks.",        cost:{unity:150} },
-      { id:"siege-works",      name:"Siege Works",      desc:"Rams and towers: +10% force in boss assaults.",                          cost:{unity:100, course:60} },
-      { id:"wedge",            name:"Wedge Formation",  desc:"Unlock the aggressive Wedge — bigger swings, both directions.",          cost:{body:100, cyber:80} },
-      { id:"veteran-doctrine", name:"Veteran Doctrine", desc:"Codified training: troop upgrades cost 25% less.",                       cost:{course:200}, requiresBadge:"cert-secplus" },
-      { id:"ghost-protocols",  name:"Ghost Protocols",  desc:"Deep recon: revealing the fog also exposes enemy strength.",             cost:{cyber:100},  requiresBadge:"cert-google" },
+      /* ---- The Krypteia — Cybersecurity (Intel) ---- */
+      { id:"krypteia-helot-watch",      branch:"krypteia", tier:1, name:"Helot Watch",      cost:{cyber:100}, gate:{},
+        desc:"Forward watchers halve the Intel cost of recon." },
+      { id:"krypteia-night-marches",    branch:"krypteia", tier:1, name:"Night Marches",    cost:{cyber:100}, gate:{},
+        desc:"+5 readiness floor for the Scouts." },
+      { id:"krypteia-whisper-network",  branch:"krypteia", tier:1, name:"Whisper Network",  cost:{cyber:120}, gate:{},
+        desc:"Before recon, informants narrow the exploit vector down to two domains." },
+      { id:"krypteia-xiphos-doctrine",  branch:"krypteia", tier:2, name:"Xiphos Doctrine",  cost:{cyber:220},
+        gate:{ requiresNodes:["krypteia-helot-watch"], requiresLevel:6 },
+        desc:"+10% push force when the enemy targets your strongest domain." },
+      { id:"krypteia-dead-drop",        branch:"krypteia", tier:2, name:"Dead Drop",        cost:{cyber:220},
+        gate:{ requiresNodes:["krypteia-night-marches"], requiresLevel:6 },
+        desc:"+10% passive Intel accrual." },
+      { id:"krypteia-shadow-roll-call", branch:"krypteia", tier:2, name:"Shadow Roll Call", cost:{cyber:260},
+        gate:{ requiresNodes:["krypteia-whisper-network"], requiresLevel:8 },
+        desc:"One free fog-of-war reveal each calendar month." },
+      { id:"krypteia-sanction",         branch:"krypteia", tier:3, name:"The Sanction",     cost:{cyber:400},
+        gate:{ requiresNodes:["krypteia-xiphos-doctrine","krypteia-dead-drop"], requiresBadges:{ any:["cert-google"] } },
+        desc:"In a boss assault, spend 60 Intel to expose a weak point — +15% force, that fight only." },
+      { id:"krypteia-lakonic-silence",  branch:"krypteia", tier:3, name:"Lakonic Silence",  cost:{cyber:450},
+        gate:{ requiresNodes:["krypteia-shadow-roll-call"], requiresBadges:{ any:["cert-oscp","cert-ceh"] } },
+        desc:"Recon costs a flat 5 Intel, permanently." },
+
+      /* ---- The Agoge — Coursework (Supply) ---- */
+      { id:"agoge-first-rations",       branch:"agoge", tier:1, name:"First Rations",       cost:{course:100}, gate:{},
+        desc:"Reinforcing Quartermasters costs 20% less." },
+      { id:"agoge-common-mess",         branch:"agoge", tier:1, name:"Common Mess",         cost:{course:100}, gate:{},
+        desc:"+5 readiness floor for the Quartermasters." },
+      { id:"agoge-boys-lessons",        branch:"agoge", tier:1, name:"Boys' Lessons",       cost:{course:120}, gate:{},
+        desc:"Recruit → Veteran upgrades cost 15% less, all units — the Agoge trains everyone." },
+      { id:"agoge-elders-instruction",  branch:"agoge", tier:2, name:"Elders' Instruction", cost:{course:220},
+        gate:{ requiresNodes:["agoge-boys-lessons"], requiresLevel:6 },
+        desc:"Veteran → Elite upgrades cost 15% less, all units (stacks with unit-specific discounts)." },
+      { id:"agoge-paidonomos-whip",     branch:"agoge", tier:2, name:"Paidonomos' Whip",    cost:{course:220},
+        gate:{ requiresNodes:["agoge-first-rations"], requiresLevel:6 },
+        desc:"+2% Supply income per consecutive logged day, capped at +10%. A gap resets it to zero — never below." },
+      { id:"agoge-public-recitation",   branch:"agoge", tier:2, name:"Public Recitation",   cost:{course:260},
+        gate:{ requiresNodes:["agoge-common-mess"], requiresLevel:8 },
+        desc:"+10% campaign reward when Coursework is the week's focus." },
+      { id:"agoge-graduation-rite",     branch:"agoge", tier:3, name:"Graduation Rite",     cost:{course:400},
+        gate:{ requiresNodes:["agoge-elders-instruction","agoge-paidonomos-whip"],
+               requiresBadges:{ countAtLeast:{ group:"Certifications", count:2 } } },
+        desc:"Permanent +10% Quartermaster force." },
+      { id:"agoge-ephebes-oath",        branch:"agoge", tier:3, name:"Ephebe's Oath",       cost:{course:450},
+        gate:{ requiresNodes:["agoge-public-recitation"], requiresBadges:{ any:["cert-secplus"] } },
+        desc:"Raise the Oath banner. One-time +4 Army Size (Quartermasters)." },
+
+      /* ---- The Gymnasion — Calisthenics (Muscle) ---- */
+      { id:"gymnasion-oil-and-sand",    branch:"gymnasion", tier:1, name:"Oil & Sand",       cost:{body:100}, gate:{},
+        desc:"Reinforcing Shock Troops costs 20% less." },
+      { id:"gymnasion-pankration",      branch:"gymnasion", tier:1, name:"Pankration",       cost:{body:100}, gate:{},
+        desc:"+8% push force for the Shock Troops." },
+      { id:"gymnasion-morning-drill",   branch:"gymnasion", tier:1, name:"Morning Drill",    cost:{body:120}, gate:{},
+        desc:"+5 readiness floor for the Shock Troops." },
+      { id:"gymnasion-long-march",      branch:"gymnasion", tier:2, name:"Long March",       cost:{body:220},
+        gate:{ requiresNodes:["gymnasion-morning-drill"], requiresLevel:6 },
+        desc:"+10 additional Shock Troop readiness floor (stacks)." },
+      { id:"gymnasion-pyrriche",        branch:"gymnasion", tier:2, name:"Pyrriche",         cost:{body:220},
+        gate:{ requiresNodes:["gymnasion-pankration"], requiresLevel:6 },
+        desc:"Elite Shock Troops fight at +15% force in boss assaults." },
+      { id:"gymnasion-iron-discipline", branch:"gymnasion", tier:2, name:"Iron Discipline",  cost:{body:260},
+        gate:{ requiresNodes:["gymnasion-oil-and-sand"], requiresLevel:8 },
+        desc:"Shock Troop tier upgrades cost 20% less." },
+      { id:"gymnasion-olympiad-standard", branch:"gymnasion", tier:3, name:"Olympiad Standard", cost:{body:400},
+        gate:{ requiresNodes:["gymnasion-long-march","gymnasion-pyrriche"],
+               requiresBadges:{ countAtLeast:{ ids:["phy-hs","phy-planche","phy-pistol","phy-mu"], count:2 } } },
+        desc:"Permanent +15% Shock Troop force." },
+      { id:"gymnasion-three-hundred",   branch:"gymnasion", tier:3, name:"The Three Hundred", cost:{body:500},
+        gate:{ requiresNodes:["gymnasion-iron-discipline"],
+               requiresBadges:{ all:["phy-hs","phy-planche","phy-pistol","phy-mu"] } },
+        desc:"All current and future Shock Troops are Elite, automatically." },
+
+      /* ---- The Poliorcetics — Game Dev (Materiel). Tier 3 gates on level:
+             no badge in the roster maps naturally to Game Dev. ---- */
+      { id:"poliorcetics-timber-rope",     branch:"poliorcetics", tier:1, name:"Timber & Rope",    cost:{unity:100}, gate:{},
+        desc:"Reinforcing Engineers costs 20% less." },
+      { id:"poliorcetics-siege-ramp",      branch:"poliorcetics", tier:1, name:"Siege Ramp",       cost:{unity:100}, gate:{},
+        desc:"+8% push force for the Engineers." },
+      { id:"poliorcetics-blueprint-cache", branch:"poliorcetics", tier:1, name:"Blueprint Cache",  cost:{unity:120}, gate:{},
+        desc:"+10% passive Materiel accrual." },
+      { id:"poliorcetics-helepolis",       branch:"poliorcetics", tier:2, name:"Helepolis",        cost:{unity:240},
+        gate:{ requiresNodes:["poliorcetics-siege-ramp"], requiresLevel:6 },
+        desc:"The Taker of Cities: +15% total force in boss assaults." },
+      { id:"poliorcetics-battering-ram",   branch:"poliorcetics", tier:2, name:"Battering Ram",    cost:{unity:220},
+        gate:{ requiresNodes:["poliorcetics-timber-rope"], requiresLevel:6 },
+        desc:"Engineer tier upgrades cost 15% less." },
+      { id:"poliorcetics-torsion-engines", branch:"poliorcetics", tier:2, name:"Torsion Engines",  cost:{unity:260},
+        gate:{ requiresNodes:["poliorcetics-blueprint-cache"], requiresLevel:8 },
+        desc:"Elite Engineers push at +10% force." },
+      { id:"poliorcetics-archimedes",      branch:"poliorcetics", tier:3, name:"The Archimedes",   cost:{unity:400},
+        gate:{ requiresNodes:["poliorcetics-helepolis","poliorcetics-battering-ram"], requiresLevel:15 },
+        desc:"Permanent +10% Engineer force." },
+      { id:"poliorcetics-legacy",          branch:"poliorcetics", tier:3, name:"Poliorcetic Legacy", cost:{unity:450},
+        gate:{ requiresNodes:["poliorcetics-torsion-engines"], requiresLevel:25 },
+        desc:"All other Poliorcetics nodes cost 15% less — already-bought ones are retroactively refunded." },
+
+      /* ---- The Ephorate — High Command (blended cost) ---- */
+      { id:"ephorate-lambda-standard",  branch:"ephorate", tier:1, name:"Lambda Standard", cost:{cyber:40,course:40,body:40,unity:40}, gate:{},
+        desc:"+3 readiness floor, every domain." },
+      { id:"ephorate-heralds-call",     branch:"ephorate", tier:1, name:"Herald's Call",   cost:{cyber:40,course:40,body:35,unity:35}, gate:{},
+        desc:"+10% currency reward on skirmish wins." },
+      { id:"ephorate-council-of-five",  branch:"ephorate", tier:1, name:"Council of Five", cost:{cyber:35,course:35,body:40,unity:40}, gate:{},
+        desc:"Each Sunday, preview next week's suggested campaign a day early." },
+      { id:"ephorate-wedge-formation",  branch:"ephorate", tier:2, name:"Wedge Formation", cost:{body:100,cyber:80},
+        gate:{ requiresNodes:["ephorate-lambda-standard"], requiresLevel:8 },
+        desc:"Unlocks the aggressive Wedge formation — bigger swings, both directions." },
+      { id:"ephorate-testudo-doctrine", branch:"ephorate", tier:2, name:"Testudo Doctrine", cost:{cyber:60,course:60,body:60,unity:60},
+        gate:{ requiresNodes:["ephorate-heralds-call"], requiresLevel:8 },
+        desc:"Boss-loss regroup penalty reduced 20%." },
+      { id:"ephorate-runners-relay",    branch:"ephorate", tier:2, name:"Runners' Relay",  cost:{cyber:60,course:60,body:60,unity:60},
+        gate:{ requiresNodes:["ephorate-council-of-five"], requiresLevel:10 },
+        desc:"+5% currency income, all domains, while momentum is 5+ days." },
+      { id:"ephorate-three-hundreds-banner", branch:"ephorate", tier:3, name:"Banner of the 300", cost:{cyber:100,course:100,body:100,unity:100},
+        gate:{ requiresNodes:["ephorate-wedge-formation"], requiresBadges:{ any:["cert-oscp"] } },
+        desc:"Raise the Banner of the Three Hundred. One-time +5 Army Size — your choice of domain." },
+      { id:"ephorate-leonidas-mandate", branch:"ephorate", tier:3, name:"Leonidas' Mandate", cost:{cyber:125,course:125,body:125,unity:125},
+        gate:{ requiresNodes:["ephorate-testudo-doctrine","ephorate-runners-relay"],
+               requiresBadges:{ all:["cert-cissp","cert-oscp"] } },
+        desc:"Permanent +5% force, all domains." },
     ],
   },
 };
@@ -492,13 +671,43 @@ function zeroPerDomain(v){ const o={}; for(const id of domainIds()) o[id]=v; ret
 function freshState(){
   return migrate({ version:1, lastModified:new Date().toISOString(), log:[], badges:{} });
 }
+/* v2 research ids: direct successors are granted, orphans are refunded in full.
+   No-punishment rule: migration never simply deletes something that was paid for. */
+const LEGACY_RESEARCH_MAP = {
+  "field-scouts": "krypteia-helot-watch",      // same effect: recon cost -50%
+  "siege-works":  "poliorcetics-helepolis",    // superseded per design
+  "wedge":        "ephorate-wedge-formation",  // same effect, same cost
+};
+const LEGACY_RESEARCH_REFUND = {
+  "fortifications":   { unity:150 },
+  "veteran-doctrine": { course:200 },
+  "ghost-protocols":  { cyber:100 },
+};
+function migrateResearchV3(s){
+  const next = new Set();
+  for(const id of (s.research||[])){
+    if(LEGACY_RESEARCH_MAP[id]) next.add(LEGACY_RESEARCH_MAP[id]);
+    else if(LEGACY_RESEARCH_REFUND[id]){
+      for(const [dom,c] of Object.entries(LEGACY_RESEARCH_REFUND[id]))
+        s.army.bonuses[dom] = (s.army.bonuses[dom]||0) + c;
+    }
+    else if(CONFIG.war.research.some(r=>r.id===id)) next.add(id); // already a v3 id
+  }
+  s.research = [...next];
+}
 function migrate(s){
   if(!s || typeof s!=="object") return freshState();
   if(!Array.isArray(s.log)) s.log=[];
   if(!s.badges || typeof s.badges!=="object") s.badges={};
-  if(s.version>=2 && s.army && s.army.troops) { fillWarDefaults(s); return s; }
-  // v1 -> v2
-  s.version = 2;
+  if(s.version>=3 && s.army && s.army.troops){ fillWarDefaults(s); return s; }
+  if(s.version===2 && s.army && s.army.troops){
+    migrateResearchV3(s);
+    s.version = 3;
+    fillWarDefaults(s);
+    return s;
+  }
+  // v1 -> v3
+  s.version = 3;
   s.army = {
     troops:  zeroPerDomain(CONFIG.war.foundingTroops),  // founding garrison
     tiers:   zeroPerDomain(0),
@@ -511,6 +720,7 @@ function migrate(s){
   s.lastResult = null;
   s.bosses = {};
   s.regroup = null;
+  fillWarDefaults(s);
   return s;
 }
 function fillWarDefaults(s){
@@ -524,6 +734,7 @@ function fillWarDefaults(s){
   if(s.lastResult===undefined) s.lastResult=null;
   if(!s.bosses || typeof s.bosses!=="object") s.bosses={};
   if(s.regroup===undefined) s.regroup=null;
+  if(s.freeReveal===undefined) s.freeReveal=null; // "YYYY-MM" of last Shadow Roll Call use
 }
 let state = load();
 
@@ -601,8 +812,22 @@ const W = CONFIG.war;
 function domainAllXp(domainId){
   return state.log.filter(e=>e.domain===domainId).reduce((s,e)=>s+e.awarded,0);
 }
+function consecutiveLoggedDays(){ // streak of days with any entry, ending today or yesterday
+  const days = new Set(state.log.map(e=>e.date));
+  let streak = 0;
+  const d = new Date();
+  if(!days.has(isoDate(d))) d.setDate(d.getDate()-1); // today not logged yet doesn't break it
+  while(days.has(isoDate(d))){ streak++; d.setDate(d.getDate()-1); }
+  return streak;
+}
 function balance(domainId){
-  const minted = Math.floor(domainAllXp(domainId) * W.currencyRate);
+  let minted = domainAllXp(domainId) * W.currencyRate;
+  if(domainId==="cyber"  && hasResearch("krypteia-dead-drop"))          minted *= 1.10;
+  if(domainId==="unity"  && hasResearch("poliorcetics-blueprint-cache"))minted *= 1.10;
+  if(domainId==="course" && hasResearch("agoge-paidonomos-whip"))
+    minted *= 1 + Math.min(0.10, 0.02*consecutiveLoggedDays());
+  if(hasResearch("ephorate-runners-relay") && activeDaysLast7(new Date())>=5) minted *= 1.05;
+  minted = Math.floor(minted);
   return Math.max(0, minted + (state.army.bonuses[domainId]||0) - (state.army.spent[domainId]||0));
 }
 function activeDays7Domain(domainId, refDate){
@@ -620,13 +845,26 @@ function regroupActive(){
   if(new Date() > until){ state.regroup=null; return false; }
   return true;
 }
+function researchReadinessFloor(domainId){
+  let f = 0;
+  if(hasResearch("ephorate-lambda-standard")) f += 3;
+  if(domainId==="cyber"  && hasResearch("krypteia-night-marches")) f += 5;
+  if(domainId==="course" && hasResearch("agoge-common-mess"))      f += 5;
+  if(domainId==="body"){
+    if(hasResearch("gymnasion-morning-drill")) f += 5;
+    if(hasResearch("gymnasion-long-march"))    f += 10;
+  }
+  return f;
+}
+function regroupPenaltyNow(){
+  return hasResearch("ephorate-testudo-doctrine") ? Math.round(W.regroup.penalty*0.8) : W.regroup.penalty;
+}
 function readinessOf(domainId){
   const n = activeDays7Domain(domainId);
   let r = W.readinessByActiveDays[Math.min(7,Math.max(0,n))];
-  let floor = W.tierReadinessFloor[state.army.tiers[domainId]||0];
-  if(hasResearch("fortifications")) floor += 10;
+  let floor = W.tierReadinessFloor[tierOf(domainId)] + researchReadinessFloor(domainId);
   r = Math.max(r, floor);
-  if(regroupActive()) r -= W.regroup.penalty;
+  if(regroupActive()) r -= regroupPenaltyNow();
   return Math.max(5, Math.min(100, r));
 }
 function armyReadiness(){ // overall = simple average across domains
@@ -635,21 +873,60 @@ function armyReadiness(){ // overall = simple average across domains
 }
 function armySizeTotal(){ return domainIds().reduce((s,id)=>s+(state.army.troops[id]||0),0); }
 function hasResearch(id){ return state.research.includes(id); }
-function tierOf(domainId){ return state.army.tiers[domainId]||0; }
-
-function troopForce(domainId, weight){
+function tierOf(domainId){
+  let t = state.army.tiers[domainId]||0;
+  // The Three Hundred: all current AND future Shock Troops are Elite, derived (import-safe)
+  if(domainId==="body" && hasResearch("gymnasion-three-hundred")) t = W.tierNames.length-1;
+  return t;
+}
+function strongestDomain(){ // highest all-time XP; ties -> first in CONFIG order
+  let best=null, max=-1;
+  for(const id of domainIds()){ const x=domainAllXp(id); if(x>max){ max=x; best=id; } }
+  return best;
+}
+/* Research force multipliers by context.
+   ctx null   = neutral "paper strength" — NO research bonuses. The enemy's
+                baseline mirrors this, so bought force bonuses genuinely move
+                the line instead of scaling the enemy too.
+   ctx "push" = weekly skirmish push line.
+   ctx "boss" = boss assaults (walls are fixed, so everything counts).       */
+function researchForceMult(domainId, ctx){
+  if(!ctx) return 1;
+  let m = 1;
+  if(hasResearch("ephorate-leonidas-mandate")) m *= 1.05;
+  if(domainId==="course" && hasResearch("agoge-graduation-rite"))     m *= 1.10;
+  if(domainId==="body"   && hasResearch("gymnasion-olympiad-standard")) m *= 1.15;
+  if(domainId==="unity"  && hasResearch("poliorcetics-archimedes"))   m *= 1.10;
+  if(ctx==="push"){
+    if(domainId==="body"  && hasResearch("gymnasion-pankration"))     m *= 1.08;
+    if(domainId==="unity" && hasResearch("poliorcetics-siege-ramp"))  m *= 1.08;
+    if(domainId==="unity" && tierOf("unity")===W.tierNames.length-1
+       && hasResearch("poliorcetics-torsion-engines"))                m *= 1.10;
+  }
+  if(ctx==="boss"){
+    if(domainId==="body" && tierOf("body")===W.tierNames.length-1
+       && hasResearch("gymnasion-pyrriche"))                          m *= 1.15;
+  }
+  return m;
+}
+function troopForce(domainId, weight, ctx){
   const troops = state.army.troops[domainId]||0;
   const mult = W.tierForceMult[tierOf(domainId)];
-  return troops * W.forcePerTroop * mult * (readinessOf(domainId)/100) * (weight||1);
+  return troops * W.forcePerTroop * mult * (readinessOf(domainId)/100) * (weight||1)
+         * researchForceMult(domainId, ctx||null);
 }
-function playerForce(campaign){ // campaign-weighted; pass null for neutral
+function playerForce(campaign, ctx){ // campaign-weighted; pass null for neutral
+  if(ctx===undefined) ctx = campaign ? "push" : null;
   const lvl = levelFromXp(totalXp());
   let f = W.commanderBase + W.commanderPerLevel*lvl;
   const enemy = campaign ? enemyById(campaign.enemyId) : null;
   for(const id of domainIds()){
     const wgt = (enemy && enemy.focus===id) ? W.focusWeight : 1;
-    f += troopForce(id, wgt);
+    f += troopForce(id, wgt, ctx);
   }
+  // Xiphos Doctrine: +10% push force when they target your strongest domain
+  if(ctx==="push" && enemy && hasResearch("krypteia-xiphos-doctrine")
+     && enemy.focus===strongestDomain()) f *= 1.10;
   return f;
 }
 function enemyById(id){ return W.enemies.find(e=>e.id===id); }
@@ -665,11 +942,15 @@ function hashStr(s){
   for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
   return (h>>>0);
 }
-function seededPick(arr, salt){
-  if(!arr.length) return null;
-  return arr[ hashStr(currentWeekStart()+"|"+salt) % arr.length ];
+function nextWeekStart(){
+  const d = new Date(currentWeekStart()+"T12:00:00"); d.setDate(d.getDate()+7);
+  return isoDate(d);
 }
-function neglectedDomain(){ // lowest XP share over trailing 14 days
+function seededPick(arr, salt, weekStart){
+  if(!arr.length) return null;
+  return arr[ hashStr((weekStart||currentWeekStart())+"|"+salt) % arr.length ];
+}
+function neglectedDomain(weekStart){ // lowest XP share over trailing 14 days
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-14);
   const totals = zeroPerDomain(0);
   for(const e of state.log){ if(new Date(e.date+"T12:00:00")>=cutoff) totals[e.domain]=(totals[e.domain]||0)+e.awarded; }
@@ -678,7 +959,7 @@ function neglectedDomain(){ // lowest XP share over trailing 14 days
     if(totals[id]<min){ min=totals[id]; picks=[id]; }
     else if(totals[id]===min){ picks.push(id); }
   }
-  return seededPick(picks,"neglect");
+  return seededPick(picks,"neglect",weekStart);
 }
 
 /* ---- campaign lifecycle: runs once on load ---- */
@@ -705,21 +986,37 @@ function resolveCampaign(){
   const enemy = enemyById(c.enemyId);
   const won = pos >= W.winThreshold;
   if(won){
-    for(const id of domainIds()) state.army.bonuses[id]=(state.army.bonuses[id]||0)+W.skirmishReward.all;
-    state.army.bonuses[enemy.focus]+=W.skirmishReward.focusExtra;
+    let mult = 1;
+    if(hasResearch("ephorate-heralds-call")) mult *= 1.10;
+    if(enemy.focus==="course" && hasResearch("agoge-public-recitation")) mult *= 1.10;
+    const all = Math.round(W.skirmishReward.all*mult);
+    const extra = Math.round(W.skirmishReward.focusExtra*mult);
+    for(const id of domainIds()) state.army.bonuses[id]=(state.army.bonuses[id]||0)+all;
+    state.army.bonuses[enemy.focus]+=extra;
   }
   state.lastResult = { name:enemy.name, won, pos:Math.round(pos*100), weekStart:c.weekStart };
   // loss is neutral by design — nothing rolls back, nothing is taken
 }
-function reconCostNow(){ return hasResearch("field-scouts") ? Math.round(W.reconCost/2) : W.reconCost; }
+function reconCostNow(){
+  if(hasResearch("krypteia-lakonic-silence")) return 5;
+  if(hasResearch("krypteia-helot-watch")) return Math.round(W.reconCost/2);
+  return W.reconCost;
+}
+function monthKey(){ return isoDate(new Date()).slice(0,7); }
+function freeReconAvailable(){
+  return hasResearch("krypteia-shadow-roll-call") && state.freeReveal !== monthKey();
+}
 function doRecon(){
   const c = state.campaign;
   if(!c || !c.confirmed || c.revealed) return;
-  const cost = reconCostNow();
-  if(balance("cyber") < cost){ toast("Not enough Intel — "+cost+" needed"); return; }
-  state.army.spent.cyber += cost;
+  if(freeReconAvailable()){
+    state.freeReveal = monthKey();
+  } else {
+    const cost = reconCostNow();
+    if(balance("cyber") < cost){ toast("Not enough Intel — "+cost+" needed"); return; }
+    state.army.spent.cyber += cost;
+  }
   c.revealed = true;
-  if(hasResearch("ghost-protocols")) c.strengthKnown = true;
   save(); renderAll();
   toast("Fog lifted — they target your "+domainName(c.exploit));
 }
@@ -729,8 +1026,8 @@ function pushPosition(){
   const c = state.campaign;
   if(!c || !c.confirmed) return { pos:0.5, P:playerForce(null), E:null, exploitActive:false };
   const enemy = enemyById(c.enemyId);
-  const P = playerForce(c);
-  let E = enemy.difficulty * playerForce(null);
+  const P = playerForce(c, "push");
+  let E = enemy.difficulty * playerForce(null); // neutral baseline — research force bonuses don't feed the enemy
   const exploitActive = readinessOf(c.exploit) < W.exploitThreshold;
   if(exploitActive) E *= (1+W.exploitBonus);
   const k = W.pushK[state.formation]||W.pushK.wall;
@@ -754,15 +1051,27 @@ function bossCooldownUntil(bs){
   d.setDate(d.getDate()+W.regroup.days);
   return d;
 }
+function bossPlayerForce(){ // boss-context force, before The Sanction
+  let P = playerForce(null, "boss");
+  if(hasResearch("poliorcetics-helepolis")) P *= (1+W.boss.helepolisBonus);
+  return P;
+}
 function attemptBoss(badgeId, badgeName){
   const bs = bossState(badgeId);
   const cd = bossCooldownUntil(bs);
   if(cd && new Date()<cd){ toast("Regrouping — next assault "+isoDate(cd)); return; }
   const need = bossForce(badgeId);
-  let P = playerForce(null);
-  if(hasResearch("siege-works")) P *= (1+W.boss.siegeBonus);
+  let P = bossPlayerForce();
+  // The Sanction: optional Intel spend for a one-fight weak point
+  let sanction = false;
+  const sc = W.boss.sanction;
+  if(hasResearch("krypteia-sanction") && balance("cyber")>=sc.cost){
+    sanction = confirm(`Deploy THE SANCTION?\n\nSpend ${sc.cost} Intel to expose a weak point: +${Math.round(sc.bonus*100)}% force, this assault only.`);
+    if(sanction) P *= (1+sc.bonus);
+  }
   const margin = P/need;
-  if(!confirm(`Assault ${badgeName}?\n\nYour force: ${Math.round(P)}\nTheir walls: ${need}\n\nA loss forces a regroup: -${W.regroup.penalty} readiness for ${W.regroup.days} days.`)) return;
+  if(!confirm(`Assault ${badgeName}?\n\nYour force: ${Math.round(P)}${sanction?" (Sanction active)":""}\nTheir walls: ${need}\n\nA loss forces a regroup: -${regroupPenaltyNow()} readiness for ${W.regroup.days} days.`)) return;
+  if(sanction) state.army.spent.cyber += sc.cost; // only spent once the assault is actually launched
   bs.attempts++; bs.lastAttempt = isoDate(new Date());
   if(margin >= 1){
     bs.breached = true; bs.lastWon = true; bs.lastMargin = margin;
@@ -771,15 +1080,22 @@ function attemptBoss(badgeId, badgeName){
   } else {
     bs.lastWon = false; bs.lastMargin = margin;
     state.regroup = { until: isoDate(new Date(Date.now()+W.regroup.days*86400000)), reason: badgeName };
-    toast("Repelled. Regroup: -"+W.regroup.penalty+" readiness for "+W.regroup.days+" days.");
+    toast("Repelled. Regroup: -"+regroupPenaltyNow()+" readiness for "+W.regroup.days+" days.");
   }
   state.bosses[badgeId]=bs;
   save(); renderAll();
 }
 
 /* ---- spending ---- */
+function reinforceCostFor(domainId){
+  let c = W.reinforceCost;
+  if( (domainId==="course" && hasResearch("agoge-first-rations")) ||
+      (domainId==="body"   && hasResearch("gymnasion-oil-and-sand")) ||
+      (domainId==="unity"  && hasResearch("poliorcetics-timber-rope")) ) c = Math.round(c*0.8);
+  return c;
+}
 function spendReinforce(domainId){
-  const cost = W.reinforceCost;
+  const cost = reinforceCostFor(domainId);
   if(balance(domainId)<cost) return;
   state.army.spent[domainId]+=cost;
   state.army.troops[domainId]=(state.army.troops[domainId]||0)+1;
@@ -789,8 +1105,11 @@ function upgradeCost(domainId){
   const t = tierOf(domainId);
   if(t>=W.tierNames.length-1) return null;
   let c = W.tierCosts[t+1];
-  if(hasResearch("veteran-doctrine")) c = Math.round(c*0.75);
-  return c;
+  if(t===0 && hasResearch("agoge-boys-lessons"))       c *= 0.85; // Recruit -> Veteran, all units
+  if(t===1 && hasResearch("agoge-elders-instruction")) c *= 0.85; // Veteran -> Elite, all units
+  if(domainId==="body"  && hasResearch("gymnasion-iron-discipline"))  c *= 0.80;
+  if(domainId==="unity" && hasResearch("poliorcetics-battering-ram")) c *= 0.85;
+  return Math.round(c);
 }
 function spendUpgrade(domainId){
   const cost = upgradeCost(domainId);
@@ -800,18 +1119,83 @@ function spendUpgrade(domainId){
   save(); renderAll(); flashUnit(domainId);
   toast(domainName(domainId)+" "+W.unitNames[domainId]+" — now "+W.tierNames[tierOf(domainId)]);
 }
-function buyResearch(id){
-  const node = W.research.find(r=>r.id===id);
-  if(!node || hasResearch(id)) return;
-  if(node.requiresBadge){
-    const st = state.badges[node.requiresBadge];
-    if(!st || st.status!=="achieved") return;
+
+/* ---- research: gates + purchase ---- */
+function researchById(id){ return W.research.find(r=>r.id===id); }
+function badgeAchieved(id){ const st=state.badges[id]; return !!st && st.status==="achieved"; }
+function badgeName(id){ const b=CONFIG.badges.find(b=>b.id===id); return b?b.name:id; }
+function gateStatus(node){ // -> { ok, lines:[{ok,text}] }
+  const g = node.gate||{};
+  const out = { ok:true, lines:[] };
+  const push = (ok,text)=>{ out.lines.push({ok,text}); if(!ok) out.ok=false; };
+  for(const rid of (g.requiresNodes||[])){
+    const rn = researchById(rid);
+    push(hasResearch(rid), "requires: "+(rn?rn.name:rid));
   }
-  for(const [dom,c] of Object.entries(node.cost)){ if(balance(dom)<c) { toast("Can't afford "+node.name); return; } }
-  for(const [dom,c] of Object.entries(node.cost)){ state.army.spent[dom]+=c; }
+  if(g.requiresLevel){
+    push(levelFromXp(totalXp())>=g.requiresLevel, "requires: Level "+g.requiresLevel);
+  }
+  const rb = g.requiresBadges;
+  if(rb){
+    if(rb.all)  for(const bid of rb.all) push(badgeAchieved(bid), "requires: "+badgeName(bid)+" (achieved)");
+    if(rb.any)  push(rb.any.some(badgeAchieved), "requires any of: "+rb.any.map(badgeName).join(" / "));
+    if(rb.countAtLeast){
+      const ids = rb.countAtLeast.ids
+        || CONFIG.badges.filter(b=>b.group===rb.countAtLeast.group).map(b=>b.id);
+      const have = ids.filter(badgeAchieved).length;
+      const label = rb.countAtLeast.group
+        ? rb.countAtLeast.count+" "+rb.countAtLeast.group.toLowerCase()
+        : rb.countAtLeast.count+" of: "+ids.map(badgeName).join(" / ");
+      push(have>=rb.countAtLeast.count, "requires: "+label+" achieved ("+have+"/"+rb.countAtLeast.count+")");
+    }
+  }
+  return out;
+}
+function effectiveCost(node){ // Poliorcetic Legacy: -15% on the branch's other nodes
+  if(node.branch==="poliorcetics" && node.id!=="poliorcetics-legacy" && hasResearch("poliorcetics-legacy")){
+    const out={};
+    for(const [d,c] of Object.entries(node.cost)) out[d]=Math.round(c*0.85);
+    return out;
+  }
+  return node.cost;
+}
+function canAfford(cost){ return Object.entries(cost).every(([d,c])=>balance(d)>=c); }
+function buyResearch(id, opts){
+  const node = researchById(id);
+  if(!node || hasResearch(id)) return false;
+  if(!gateStatus(node).ok){ toast("Prerequisites unmet — "+node.name); return false; }
+  const cost = effectiveCost(node);
+  if(!canAfford(cost)){ toast("Can't afford "+node.name); return false; }
+  // Banner of the 300 needs a chosen domain before spending anything
+  let bannerDomain = null;
+  if(node.id==="ephorate-three-hundreds-banner"){
+    bannerDomain = (opts&&opts.bannerDomain) || null;
+    if(!domainIds().includes(bannerDomain)){ toast("Choose a domain for the Banner first"); return false; }
+  }
+  for(const [dom,c] of Object.entries(cost)) state.army.spent[dom]+=c;
   state.research.push(id);
+  // one-time effects — army size only ever grows; sacred core untouched
+  if(node.id==="agoge-ephebes-oath"){
+    state.army.troops.course = (state.army.troops.course||0)+4;
+    toast("The Oath is sworn — +4 Quartermasters join the line");
+  } else if(node.id==="ephorate-three-hundreds-banner"){
+    state.army.troops[bannerDomain] = (state.army.troops[bannerDomain]||0)+5;
+    toast("The Banner rises over the "+W.unitNames[bannerDomain]+" — +5 Army Size");
+  } else if(node.id==="poliorcetics-legacy"){
+    // retroactive: refund 15% of the base cost of already-owned Poliorcetics nodes
+    for(const r of W.research){
+      if(r.branch!=="poliorcetics" || r.id==="poliorcetics-legacy" || !hasResearch(r.id)) continue;
+      for(const [dom,c] of Object.entries(r.cost))
+        state.army.bonuses[dom]=(state.army.bonuses[dom]||0)+Math.round(c*0.15);
+    }
+    toast("Poliorcetic Legacy — prior siege research partially refunded");
+  } else if(node.id==="gymnasion-three-hundred"){
+    toast("THE THREE HUNDRED — every Shock Troop stands Elite");
+  } else {
+    toast("Research complete — "+node.name);
+  }
   save(); renderAll();
-  toast("Research complete — "+node.name);
+  return true;
 }
 function domainName(id){ const d=CONFIG.domains.find(d=>d.id===id); return d?d.name:id; }
 
@@ -863,6 +1247,7 @@ function renderHeader(){
 function renderCampaign(){
   const box = $("campaignBox"); box.innerHTML="";
   const c = state.campaign;
+  if(!c) return; // ensureCampaign() runs on load; guard for fresh/imported states mid-flow
   const enemy = enemyById(c.enemyId);
   const wkEnd = new Date(c.weekStart+"T12:00:00"); wkEnd.setDate(wkEnd.getDate()+6);
 
@@ -896,14 +1281,36 @@ function renderCampaign(){
       if(c.strengthKnown){ const {E}=pushPosition(); txt += `<span class="revealed">EST. STRENGTH: ${Math.round(E)}</span>`; }
       fog.innerHTML = txt;
     } else {
-      fog.innerHTML = `<span class="veil">Their exploit vector is hidden in the fog of war.</span>`;
+      let veil = `<span class="veil">Their exploit vector is hidden in the fog of war.</span>`;
+      if(hasResearch("krypteia-whisper-network")){
+        const decoy = seededPick(domainIds().filter(d=>d!==c.exploit), "whisper");
+        const pair = hashStr(c.weekStart+"|whisperorder")%2 ? [c.exploit,decoy] : [decoy,c.exploit];
+        veil += `<span class="veil">WHISPERS: it's your ${domainName(pair[0])} — or your ${domainName(pair[1])}.</span>`;
+      }
+      fog.innerHTML = veil;
       const rec = document.createElement("button"); rec.className="btn-ghost";
-      rec.textContent = `Recon — ${reconCostNow()} Intel`;
-      rec.disabled = balance("cyber")<reconCostNow();
+      if(freeReconAvailable()){
+        rec.textContent = "Recon — FREE (Shadow Roll Call)";
+      } else {
+        rec.textContent = `Recon — ${reconCostNow()} Intel`;
+        rec.disabled = balance("cyber")<reconCostNow();
+      }
       rec.onclick = doRecon;
       fog.appendChild(rec);
     }
     box.appendChild(fog);
+  }
+
+  // Council of Five: Sunday preview of next week's suggested campaign
+  if(hasResearch("ephorate-council-of-five") && new Date().getDay()===0){
+    const wk2 = nextWeekStart();
+    const negl2 = neglectedDomain(wk2);
+    const matching2 = W.enemies.filter(e=>e.focus===negl2);
+    const en2 = matching2.length ? seededPick(matching2,"enemy",wk2) : seededPick(W.enemies,"enemy",wk2);
+    const el = document.createElement("div");
+    el.className="last-result"; el.style.color="var(--bronze)";
+    el.textContent = `COUNCIL OF FIVE: scouts expect ${en2.name} next week.`;
+    box.appendChild(el);
   }
 
   if(state.lastResult){
@@ -918,7 +1325,7 @@ function renderCampaign(){
   if(regroupActive()){
     const el = document.createElement("div");
     el.className="last-result lost";
-    el.textContent = `REGROUPING after ${state.regroup.reason} — readiness -${W.regroup.penalty} until ${state.regroup.until}.`;
+    el.textContent = `REGROUPING after ${state.regroup.reason} — readiness -${regroupPenaltyNow()} until ${state.regroup.until}.`;
     box.appendChild(el);
   }
 }
@@ -1016,12 +1423,20 @@ function renderWarSummary(){
   const wall = document.createElement("button"); wall.className="btn-ghost"+(state.formation==="wall"?" sel":""); wall.textContent="Wall";
   wall.onclick=()=>{ state.formation="wall"; save(); renderAll(); };
   row.appendChild(wall);
-  if(hasResearch("wedge")){
+  if(hasResearch("ephorate-wedge-formation")){
     const wg = document.createElement("button"); wg.className="btn-ghost"+(state.formation==="wedge"?" sel":""); wg.textContent="Wedge";
     wg.onclick=()=>{ state.formation="wedge"; save(); renderAll(); };
     row.appendChild(wg);
   }
   host.appendChild(row);
+  // cosmetic banners — pure flavor, earned through research
+  const banners = [];
+  if(hasResearch("agoge-ephebes-oath")) banners.push("Λ EPHEBE'S OATH");
+  if(hasResearch("ephorate-three-hundreds-banner")) banners.push("Λ BANNER OF THE 300");
+  for(const b of banners){
+    const chip = document.createElement("span"); chip.className="banner-chip"; chip.textContent=b;
+    host.appendChild(chip);
+  }
 }
 function flashUnit(domainId){
   const el = document.getElementById("unit-"+domainId);
@@ -1045,8 +1460,8 @@ function renderUnits(){
       <div class="readiness-bar"><i class="${r<W.exploitThreshold?"low":""}" style="width:${r}%"></i></div>`;
     const acts = document.createElement("div"); acts.className="u-actions";
     const b1 = document.createElement("button"); b1.className="btn-ghost";
-    b1.textContent = `Reinforce +1 (${W.reinforceCost})`;
-    b1.disabled = bal < W.reinforceCost;
+    b1.textContent = `Reinforce +1 (${reinforceCostFor(id)})`;
+    b1.disabled = bal < reinforceCostFor(id);
     b1.onclick = ()=>spendReinforce(id);
     acts.appendChild(b1);
     const b2 = document.createElement("button"); b2.className="btn-ghost";
@@ -1093,7 +1508,7 @@ function renderArmory(){
       if(isBossBadge(b) && st.status==="in-progress"){
         const bs = bossState(b.id);
         const need = bossForce(b.id);
-        let P = playerForce(null); if(hasResearch("siege-works")) P*=(1+W.boss.siegeBonus);
+        let P = bossPlayerForce();
         const cd = bossCooldownUntil(bs);
         const onCd = cd && new Date()<cd;
         const strip = document.createElement("div"); strip.className="boss-strip";
@@ -1118,37 +1533,175 @@ function renderArmory(){
   }
 }
 
-/* ---------- research ---------- */
-function renderResearch(){
-  const host = $("research"); host.innerHTML="";
-  for(const node of W.research){
-    const owned = hasResearch(node.id);
-    let gated=false, gateName="";
-    if(node.requiresBadge){
-      const st = state.badges[node.requiresBadge];
-      if(!st || st.status!=="achieved"){
-        gated=true;
-        const b = CONFIG.badges.find(b=>b.id===node.requiresBadge);
-        gateName = b?b.name:node.requiresBadge;
+/* ---------- research: the Five Councils (Cytoscape tree) ----------
+   Positions are computed, never hand-placed: five branch anchors sit on a
+   ring (one per historical Ephor), and each branch's nodes fan outward from
+   its anchor by tier — Tier 1 nearest the center, Tier 3 furthest.        */
+let cy = null;
+let selectedResearchId = null;
+
+function nodeClassOf(node){
+  if(hasResearch(node.id)) return "owned";
+  return gateStatus(node).ok ? "available" : "locked";
+}
+function researchPositions(){
+  const order = Object.keys(W.researchBranches);          // 5 branches
+  const radii = [180, 320, 460];                          // tier -> distance
+  const stepDeg = { 1:20, 2:16, 3:18 };                   // fan step per tier
+  const pos = {};
+  order.forEach((branch, bi)=>{
+    const baseA = (-90 + bi*(360/order.length)) * Math.PI/180;
+    for(const t of [1,2,3]){
+      const nodes = W.research.filter(r=>r.branch===branch && r.tier===t);
+      nodes.forEach((n, i)=>{
+        const off = (i - (nodes.length-1)/2) * stepDeg[t] * Math.PI/180;
+        const a = baseA + off, r = radii[t-1];
+        pos[n.id] = { x: Math.round(r*Math.cos(a)), y: Math.round(r*Math.sin(a)) };
+      });
+    }
+  });
+  return pos;
+}
+function researchElements(){
+  const els = [], pos = researchPositions();
+  for(const [bid,b] of Object.entries(W.researchBranches)){
+    els.push({ data:{ id:"branch-"+bid, label:b.name+" · "+b.sub } });
+  }
+  for(const n of W.research){
+    els.push({ data:{ id:n.id, label:n.name, parent:"branch-"+n.branch },
+               position: pos[n.id], classes: nodeClassOf(n) });
+    for(const rid of (n.gate&&n.gate.requiresNodes)||[]){
+      els.push({ data:{ id:rid+"->"+n.id, source:rid, target:n.id },
+                 classes: hasResearch(rid) ? "owned-src" : "" });
+    }
+  }
+  return els;
+}
+function initResearchGraph(){
+  const box = $("cy");
+  const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const IRON=cssv("--iron"), RIVET=cssv("--rivet"), BRONZE=cssv("--bronze"),
+        MOSS=cssv("--moss"), BONE=cssv("--bone"), ASH=cssv("--ash");
+  cy = cytoscape({
+    container: box,
+    elements: researchElements(),
+    layout: { name:"preset" },
+    minZoom: 0.25, maxZoom: 2.5, wheelSensitivity: 0.2,
+    autoungrabify: true, boxSelectionEnabled: false,
+    style: [
+      { selector:"node", style:{
+          width:44, height:44, shape:"ellipse",
+          "background-color":IRON, "border-width":2, "border-color":RIVET,
+          label:"data(label)", color:ASH, "font-size":9,
+          "font-family":"JetBrains Mono, monospace",
+          "text-wrap":"wrap", "text-max-width":80,
+          "text-valign":"bottom", "text-margin-y":6 }},
+      { selector:"node.locked",    style:{ opacity:0.45 }},
+      { selector:"node.available", style:{ "border-color":BRONZE, "border-width":3, color:BONE }},
+      { selector:"node.owned",     style:{ "border-color":MOSS, "background-color":"#39422f", color:BONE }},
+      { selector:"node.picked",    style:{ "border-color":BONE, "border-width":4 }},
+      { selector:":parent", style:{
+          "background-color":BONE, "background-opacity":0.03,
+          "border-width":1, "border-style":"dashed", "border-color":RIVET,
+          label:"data(label)", "text-valign":"top", "text-margin-y":-8,
+          "font-size":12, "font-family":"Chakra Petch, sans-serif",
+          color:BRONZE, "text-transform":"uppercase" }},
+      { selector:"edge", style:{
+          width:1.5, "line-color":RIVET, "curve-style":"straight",
+          "target-arrow-shape":"triangle", "arrow-scale":0.8, "target-arrow-color":RIVET }},
+      { selector:"edge.owned-src", style:{ "line-color":BRONZE, "target-arrow-color":BRONZE }},
+    ],
+  });
+  cy.on("tap","node", evt=>{
+    const n = evt.target;
+    if(n.isParent()) return;
+    selectedResearchId = n.id();
+    refreshResearchGraph();
+  });
+  cy.fit(undefined, 30);
+}
+function refreshResearchGraph(){
+  if(cy){
+    for(const n of W.research){
+      const el = cy.getElementById(n.id);
+      el.removeClass("locked available owned picked");
+      el.addClass(nodeClassOf(n));
+      if(n.id===selectedResearchId) el.addClass("picked");
+      for(const rid of (n.gate&&n.gate.requiresNodes)||[]){
+        const e = cy.getElementById(rid+"->"+n.id);
+        if(hasResearch(rid)) e.addClass("owned-src"); else e.removeClass("owned-src");
       }
     }
-    const costTxt = Object.entries(node.cost).map(([d,c])=>`${c} ${W.currencies[d]}`).join(" + ");
-    const affordable = Object.entries(node.cost).every(([d,c])=>balance(d)>=c);
-    const el = document.createElement("div");
-    el.className = "rnode"+(owned?" owned":gated?" locked":"");
-    el.innerHTML = `<div class="r-name">${node.name}</div>
-      <div class="r-desc">${node.desc}</div>
-      <div class="r-cost">${owned?"RESEARCHED":costTxt}</div>
-      ${gated?`<div class="r-gate">⌀ requires: ${gateName} (achieved)</div>`:""}`;
-    if(!owned){
-      const btn = document.createElement("button"); btn.className="btn-ghost";
-      btn.textContent = gated ? "Locked" : "Research";
-      btn.disabled = gated || !affordable;
-      btn.onclick = ()=>buyResearch(node.id);
-      el.appendChild(btn);
-    }
-    host.appendChild(el);
   }
+  renderResearchDetail();
+}
+function renderResearchDetail(){
+  const host = $("researchDetail"); host.innerHTML="";
+  const node = selectedResearchId ? researchById(selectedResearchId) : null;
+  if(!node){
+    host.innerHTML = `<div class="rd-idle">Tap a node to inspect it. Bronze rings are ready to research; gray nodes are still gated.</div>`;
+    return;
+  }
+  const b = W.researchBranches[node.branch];
+  const owned = hasResearch(node.id);
+  const gs = gateStatus(node);
+  const cost = effectiveCost(node);
+  const baseCostDiffers = JSON.stringify(cost)!==JSON.stringify(node.cost);
+  const costTxt = Object.entries(cost).map(([d,c])=>`${c} ${W.currencies[d]}`).join(" + ");
+  let html = `<div class="rd-branch">${b.name} · ${b.sub} · Tier ${node.tier}</div>
+    <div class="rd-name${owned?" owned":""}">${node.name}</div>
+    <div class="rd-desc">${node.desc}</div>
+    <div class="rd-cost">${owned ? "RESEARCHED" : "Cost: "+costTxt+(baseCostDiffers?" (Legacy discount)":"")}</div>`;
+  if(!owned && gs.lines.length){
+    html += `<div class="rd-gates">`+
+      gs.lines.map(l=>`<span class="${l.ok?"ok":"no"}">${l.ok?"Λ":"⌀"} ${l.text}</span>`).join("<br>")+
+      `</div>`;
+  }
+  host.innerHTML = html;
+  if(owned) return;
+  const acts = document.createElement("div"); acts.className="rd-actions";
+  // Banner of the 300: pick the receiving domain before buying
+  let domSel = null;
+  if(node.id==="ephorate-three-hundreds-banner" && gs.ok){
+    domSel = document.createElement("select");
+    for(const d of CONFIG.domains){
+      const o=document.createElement("option"); o.value=d.id;
+      o.textContent = "+5 "+W.unitNames[d.id]; domSel.appendChild(o);
+    }
+    acts.appendChild(domSel);
+  }
+  const btn = document.createElement("button"); btn.className="btn-ghost";
+  const affordable = canAfford(cost);
+  btn.textContent = !gs.ok ? "Locked" : affordable ? "Research" : "Can't afford";
+  btn.disabled = !gs.ok || !affordable;
+  btn.onclick = ()=>buyResearch(node.id, domSel?{bannerDomain:domSel.value}:undefined);
+  acts.appendChild(btn);
+  host.appendChild(acts);
+}
+function renderResearchFallback(box){
+  // only reached if the Cytoscape CDN was unreachable — the tree must still work offline
+  let list = box.querySelector(".rfallback");
+  if(!list){ box.innerHTML=""; list=document.createElement("div"); list.className="rfallback"; box.appendChild(list); }
+  list.innerHTML="";
+  for(const n of W.research){
+    const b = W.researchBranches[n.branch];
+    const el = document.createElement("div");
+    el.className = "rnode "+nodeClassOf(n);
+    el.innerHTML = `${n.name}<small>${b.name} · T${n.tier}</small>`;
+    el.onclick = ()=>{ selectedResearchId=n.id; renderResearchDetail(); };
+    list.appendChild(el);
+  }
+}
+function renderResearch(){
+  const box = $("cy");
+  if(typeof cytoscape==="undefined"){ renderResearchFallback(box); renderResearchDetail(); return; }
+  if(!cy){
+    if(!box.clientWidth) return;      // tab hidden — init on first visible render
+    initResearchGraph();
+  } else {
+    cy.resize();
+  }
+  refreshResearchGraph();
 }
 
 /* ---------- log tab (preserved from v1) ---------- */
