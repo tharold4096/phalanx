@@ -1546,7 +1546,7 @@ function nodeClassOf(node){
 }
 function researchPositions(){
   const order = Object.keys(W.researchBranches);          // krypteia(top), agoge(right), gymnasion(bottom-right), poliorcetics(bottom-left), ephorate(left)
-  const radii = [260, 460, 660];                          // tier -> base distance from branch anchor (wider rings, less crowding)
+  const radii = [260, 500, 660];                          // tier -> base distance from branch anchor (wider rings, less crowding)
   const stepDeg = { 1:30, 2:22, 3:22 };                    // wider fan per tier — tier 1 sits nearest center so it needs the most room
   // Krypteia (top) stays close in; the bottom pair and the side pair push further
   // out along their own angle so each cluster clears the central pile-up.
@@ -1590,7 +1590,7 @@ function initResearchGraph(){
     container: box,
     elements: researchElements(),
     layout: { name:"preset" },
-    minZoom: 0.25, maxZoom: 2.5, wheelSensitivity: 0.2,
+    minZoom: 0.25, maxZoom: 2.5, wheelSensitivity: 1.0,
     autoungrabify: true, boxSelectionEnabled: false,
     style: [
       { selector:"node", style:{
