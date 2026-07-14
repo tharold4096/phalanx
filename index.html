@@ -28,10 +28,13 @@
     - Weekly skirmish: Monday-start week. Suggested enemy (confirm or swap).
       Hidden exploit vector revealed by recon (Intel). Live tug-of-war push
       line recomputed on load. Win banks currency. Loss is NEUTRAL — by design.
-    - Bosses: badges in bossGroups marked in-progress become active sieges.
-      Assaults can be LOST -> regroup (temporary readiness dip + cooldown).
-      Core XP / Level / Army Size are never touched by a loss. Badge
-      achievement stays fully manual.
+    - Bosses (v4): a named roster in its own tab, linked to in-progress
+      badges. Engaging a boss REPLACES the week's campaign (skirmish reward
+      forfeited) and resolves on the same push line at week's end. Losses
+      stay heavier than skirmishes: -15 readiness + 3-day regroup. Wins are
+      flavor only — badge achievement stays fully manual.
+    - Skirmish losses (v4): a light -5 readiness dip, no cooldown, no
+      currency loss. Deliberately softer than boss losses.
     - Research: cross-cutting unlocks. Some gated behind real achieved badges.
 
   RESEARCH TREE (v3):
@@ -44,6 +47,13 @@
       (field-scouts -> krypteia-helot-watch, siege-works -> poliorcetics-helepolis,
       wedge -> ephorate-wedge-formation); nodes with no successor are refunded
       in full to currency bonuses. Nothing is ever just taken away.
+
+  STATS TAB (v5):
+    - Read-only visualization layer over state.log / state.badges: weekly XP
+      by domain (current CALENDAR week, Mon-Sun, same as campaigns — NOT the
+      trailing-7 momentum window) and a month calendar shaded by daily XP,
+      with Λ markers for level-ups and ◆ for badge achievements. Hand-rolled
+      CSS/HTML, no new dependency, no new state fields, no schema bump.
 
   DATA: localStorage (phalanx-save-v1 key kept for continuity), schema version 3.
   v1/v2 saves migrate automatically. Export/import unchanged (import confirms,
@@ -102,6 +112,7 @@ header{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin-bottom:22p
 
 /* ---------- tabs ---------- */
 nav.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;border-bottom:1px solid var(--rivet);padding-bottom:0}
+@media(max-width:600px){nav.tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}nav.tabs button{white-space:nowrap;flex:none}}
 nav.tabs button{
   background:transparent;border:none;border-bottom:3px solid transparent;border-radius:0;
   color:var(--ash);font-size:13px;padding:10px 16px;letter-spacing:.1em;
@@ -167,14 +178,58 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .badge.achieved{border-color:var(--moss);background:rgba(111,143,94,.08)}
 .badge.achieved .meta{color:var(--moss)}
 .badge.achieved .name::before{content:"Λ ";color:var(--moss)}
-.boss-strip{
-  margin-top:9px;padding-top:8px;border-top:1px dashed var(--rivet);
-  font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.7;
-}
-.boss-strip .b-title{color:var(--blood);font-weight:700;letter-spacing:.08em}
-.boss-strip .ok{color:var(--moss)}
-.boss-strip .warn{color:var(--bronze)}
-.boss-strip button{margin-top:6px;width:100%}
+/* ---------- boss roster (v4) ---------- */
+.boss-note{font-size:12px;margin-bottom:14px;max-width:640px;line-height:1.5}
+.bosses{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.boss-card{border:1px solid var(--rivet);border-radius:4px;background:var(--iron);padding:14px;display:flex;flex-direction:column}
+.boss-card.engaged{border-color:var(--blood)}
+.boss-card.breached{border-color:var(--moss)}
+.boss-card .b-svg{width:100%;height:auto;display:block;margin-bottom:10px}
+.boss-card .b-name{font-family:'Chakra Petch',sans-serif;color:var(--bone);font-size:15px;letter-spacing:.05em}
+.boss-card.breached .b-name::before{content:"Λ ";color:var(--moss)}
+.boss-card .b-flavor{font-size:11px;margin:5px 0 8px;line-height:1.5;min-height:32px}
+.boss-card .b-stats{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;line-height:1.9;margin-bottom:10px}
+.boss-card .b-stats .ok{color:var(--moss)}
+.boss-card .b-stats .warn{color:var(--bronze)}
+.boss-card .b-stats .bad{color:var(--blood)}
+.boss-card .b-badge{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--ash)}
+.boss-card button{margin-top:auto}
+.hydra-head-live{animation:hydra-sway 3s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:bottom center}
+@keyframes hydra-sway{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
+
+/* ---------- stats tab (v5) ---------- */
+.stats-summary{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:8px}
+.stats-summary .stat b{display:block;font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--bone)}
+.stats-summary .stat span{font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+.stats-note{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--ash);margin-bottom:14px;line-height:1.6}
+.cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cal-head b{font-family:'Chakra Petch',sans-serif;color:var(--bone);letter-spacing:.06em;font-size:15px}
+.cal-head button{padding:6px 14px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-wd{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--ash);text-align:center;padding-bottom:4px}
+.cal-cell{position:relative;aspect-ratio:1/1;min-height:34px;border:1px solid var(--rivet);border-radius:3px;background:var(--iron)}
+.cal-cell.empty{border-color:transparent;background:transparent}
+.cal-cell.i1{background:rgba(196,104,43,.14)}
+.cal-cell.i2{background:rgba(196,104,43,.32)}
+.cal-cell.i3{background:rgba(196,104,43,.55)}
+.cal-cell.today{border-color:var(--bronze)}
+.cal-cell.sel{border-color:var(--bone)}
+.cal-cell.has{cursor:pointer}
+.cal-cell.has:hover{border-color:var(--bronze)}
+.cal-cell .dnum{position:absolute;top:3px;left:5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ash)}
+.cal-cell.i2 .dnum,.cal-cell.i3 .dnum{color:var(--bone)}
+.cal-cell .mks{position:absolute;bottom:2px;right:4px;font-size:10px;display:flex;gap:2px;line-height:1}
+.mk-lvl{color:var(--bronze);font-family:'Chakra Petch',sans-serif;font-weight:700}
+.mk-badge{color:var(--moss)}
+.cal-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;align-items:center;color:var(--ash)}
+.cal-legend span{display:flex;align-items:center;gap:5px}
+.cal-legend i{width:11px;height:11px;border-radius:2px;display:block;border:1px solid var(--rivet)}
+.cal-legend i.i1{background:rgba(196,104,43,.14)}
+.cal-legend i.i2{background:rgba(196,104,43,.32)}
+.cal-legend i.i3{background:rgba(196,104,43,.55)}
+.cal-detail{margin-top:12px}
+.cal-detail .cal-day-head{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--bronze);letter-spacing:.05em;margin-bottom:4px}
+.cal-detail .cal-badge-line{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;font-size:12px;border-bottom:1px solid var(--rivet);color:var(--moss)}
 
 /* ---------- log history ---------- */
 .log-list{list-style:none;max-height:300px;overflow-y:auto}
@@ -284,6 +339,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
   .bar i,.readiness-bar i{transition:none}
   .mv{transition:none}
   .flash{animation:none}
+  .hydra-head-live{animation:none}
 }
 </style>
 </head>
@@ -320,6 +376,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
   <button id="tabBtn-log" role="tab">Log</button>
   <button id="tabBtn-armory" role="tab">Armory</button>
   <button id="tabBtn-research" role="tab">Research</button>
+  <button id="tabBtn-bosses" role="tab">Bosses</button>
+  <button id="tabBtn-stats" role="tab">Stats</button>
 </nav>
 
 <!-- ============ WAR ROOM ============ -->
@@ -394,6 +452,28 @@ button:disabled{opacity:.4;cursor:not-allowed}
     </div>
     <div id="cy"></div>
     <div class="rdetail" id="researchDetail"></div>
+  </div>
+</section>
+
+<!-- ============ BOSSES ============ -->
+<section class="tab" id="tab-bosses">
+  <div class="panel">
+    <h2>Bosses <span class="accent">//</span> Sieges
+      <span class="cy-hint">engaging a boss replaces this week's campaign</span></h2>
+    <div class="boss-note" id="bossNote"></div>
+    <div class="bosses" id="bossList"></div>
+  </div>
+</section>
+
+<!-- ============ STATS ============ -->
+<section class="tab" id="tab-stats">
+  <div class="panel">
+    <h2>This Week <span class="accent">//</span> By Domain</h2>
+    <div id="statsWeek"></div>
+  </div>
+  <div class="panel">
+    <h2>Campaign Record <span class="accent">//</span> Calendar</h2>
+    <div id="statsCal"></div>
   </div>
 </section>
 
@@ -496,18 +576,41 @@ const CONFIG = {
     winThreshold: 0.55,                // push position needed at week end to bank the win
     pushK: { wall: 1.6, wedge: 2.6 },  // wall dampens swings, wedge amplifies them
     skirmishReward: { all: 25, focusExtra: 25 },  // currency banked on a win
-    regroup: { penalty: 15, days: 3 }, // temporary readiness dip + cooldown after a lost assault
+    skirmishLossPenalty: 5,            // light readiness dip on a lost skirmish — no cooldown, no currency loss
+    regroup: { penalty: 15, days: 3 }, // heavier dip + engage-lockout after a lost boss siege
     boss: {
       base: 100, exponent: 1.5,
       helepolisBonus: 0.15,                       // Poliorcetics: Helepolis — +force in boss assaults
       sanction: { cost: 60, bonus: 0.15 },        // Krypteia: The Sanction — Intel for a weak point, one fight
     },
-    bossGroups: ["Certifications","Career"],
-    bossTiers: {
-      "cert-google":1, "cert-sql":1, "cert-anthropic":1, "cert-secplus":2,
-      "cert-cissp":3, "cert-ceh":3, "cert-oscp":4,
-      "car-sub":2, "car-payout":2, "car-income":3, "car-role":3, "car-con":1,
-    },
+    /* Named bosses, each linked to one or more badges. A boss appears in the
+       roster while ANY of its linked badges is in-progress. Multiplicity is
+       deliberately uneven (OSCP carries three, cons/bounties carry none) —
+       new bosses are just new rows here. tier drives bossForce().          */
+    bosses: [
+      { id:"sentinel-proving-ground", name:"The Proving Ground Sentinel", archetype:"colossus", tier:1, badges:["cert-google"],
+        flavor:"A training-yard giant. Every recruit meets it first." },
+      { id:"golem-query",             name:"The Query Golem",             archetype:"colossus", tier:1, badges:["cert-sql"],
+        flavor:"Built from a thousand joined tables. Speak its language or be crushed." },
+      { id:"hydra-hallucination",     name:"The Hallucination Hydra",     archetype:"hydra",    tier:1, badges:["cert-anthropic"],
+        flavor:"Cut off one confident falsehood and two more take its place." },
+      { id:"curtain-iron-curriculum", name:"The Iron Curriculum",         archetype:"rival",    tier:2, badges:["cert-secplus"],
+        flavor:"An army of acronyms marching in domains. It does not improvise." },
+      { id:"colossus-compliance",     name:"The Compliance Colossus",     archetype:"colossus", tier:3, badges:["cert-cissp"],
+        flavor:"Eight towering pillars of doctrine. It has outlasted every siege but one." },
+      { id:"chimera-exploit",         name:"The Exploit Chimera",         archetype:"hydra",    tier:3, badges:["cert-ceh"],
+        flavor:"A different attack surface on every head." },
+      { id:"mask-gatekeepers",        name:"The Gatekeeper's Mask",       archetype:"rival",    tier:3, badges:["cert-ceh"],
+        flavor:"It guards the walls with your own tools, worn as a face." },
+      { id:"colossus-root",           name:"The Root Colossus",           archetype:"colossus", tier:4, badges:["cert-oscp"],
+        flavor:"Twenty-four hours of stone. Try harder." },
+      { id:"hydra-privilege",         name:"The Privilege Hydra",         archetype:"hydra",    tier:4, badges:["cert-oscp"],
+        flavor:"Every severed head respawns with fewer rights — until one has none." },
+      { id:"intrusion-silent",        name:"The Silent Intrusion",        archetype:"rival",    tier:3, badges:["cert-oscp"],
+        flavor:"You will not hear it cross the wire. Its banner is the last thing you see." },
+      { id:"panel-interview",         name:"The Interview Panel",         archetype:"rival",    tier:2, badges:["car-role"],
+        flavor:"Five judges behind one banner. They have seen every rehearsed answer." },
+    ],
     enemies: [
       { id:"attrition", name:"The Attrition Legion", flavor:"Grinds down armies that stop drilling. Prey: the under-trained.", focus:"body",   difficulty:1.00 },
       { id:"shadow",    name:"The Shadow Compact",   flavor:"Strikes from blind spots. Only scouts see them coming.",          focus:"cyber",  difficulty:1.05 },
@@ -696,19 +799,33 @@ function migrateResearchV3(s){
   }
   s.research = [...next];
 }
+function migrateBossesV4(s){
+  // The old Assault system keyed state.bosses by BADGE id; the roster keys by
+  // boss id. Old records were flavor-only (no spend, no core impact), so they
+  // retire cleanly. Any current campaign predates types -> it's a skirmish.
+  s.bosses = {};
+  if(s.campaign && !s.campaign.type) s.campaign.type = "skirmish";
+}
 function migrate(s){
   if(!s || typeof s!=="object") return freshState();
   if(!Array.isArray(s.log)) s.log=[];
   if(!s.badges || typeof s.badges!=="object") s.badges={};
-  if(s.version>=3 && s.army && s.army.troops){ fillWarDefaults(s); return s; }
-  if(s.version===2 && s.army && s.army.troops){
-    migrateResearchV3(s);
-    s.version = 3;
+  if(s.version>=4 && s.army && s.army.troops){ fillWarDefaults(s); return s; }
+  if(s.version===3 && s.army && s.army.troops){
+    migrateBossesV4(s);
+    s.version = 4;
     fillWarDefaults(s);
     return s;
   }
-  // v1 -> v3
-  s.version = 3;
+  if(s.version===2 && s.army && s.army.troops){
+    migrateResearchV3(s);
+    migrateBossesV4(s);
+    s.version = 4;
+    fillWarDefaults(s);
+    return s;
+  }
+  // v1 -> v4
+  s.version = 4;
   s.army = {
     troops:  zeroPerDomain(CONFIG.war.foundingTroops),  // founding garrison
     tiers:   zeroPerDomain(0),
@@ -732,9 +849,11 @@ function fillWarDefaults(s){
   if(!Array.isArray(s.research)) s.research=[];
   if(s.formation!=="wall" && s.formation!=="wedge") s.formation="wall";
   if(s.campaign===undefined) s.campaign=null;
+  if(s.campaign && !s.campaign.type) s.campaign.type="skirmish";
   if(s.lastResult===undefined) s.lastResult=null;
   if(!s.bosses || typeof s.bosses!=="object") s.bosses={};
   if(s.regroup===undefined) s.regroup=null;
+  if(s.skirmishDip===undefined) s.skirmishDip=null; // light post-loss dip, non-blocking
   if(s.freeReveal===undefined) s.freeReveal=null; // "YYYY-MM" of last Shadow Roll Call use
 }
 let state = load();
@@ -860,12 +979,19 @@ function researchReadinessFloor(domainId){
 function regroupPenaltyNow(){
   return hasResearch("ephorate-testudo-doctrine") ? Math.round(W.regroup.penalty*0.8) : W.regroup.penalty;
 }
+function skirmishDipActive(){
+  if(!state.skirmishDip) return false;
+  const until = new Date(state.skirmishDip.until+"T23:59:59");
+  if(new Date() > until){ state.skirmishDip=null; return false; }
+  return true;
+}
 function readinessOf(domainId){
   const n = activeDays7Domain(domainId);
   let r = W.readinessByActiveDays[Math.min(7,Math.max(0,n))];
   let floor = W.tierReadinessFloor[tierOf(domainId)] + researchReadinessFloor(domainId);
   r = Math.max(r, floor);
   if(regroupActive()) r -= regroupPenaltyNow();
+  if(skirmishDipActive()) r -= state.skirmishDip.penalty; // light, non-blocking
   return Math.max(5, Math.min(100, r));
 }
 function armyReadiness(){ // overall = simple average across domains
@@ -977,15 +1103,32 @@ function ensureCampaign(){
     // exploit: usually the neglected domain — recon tells you for sure
     const roll = hashStr(wk+"|exploit")%100;
     const exploit = roll<60 ? neglect : seededPick(domainIds().filter(d=>d!==neglect),"exploit2");
-    state.campaign = { weekStart:wk, enemyId:enemy.id, exploit, confirmed:false, revealed:false, strengthKnown:false };
+    state.campaign = { weekStart:wk, type:"skirmish", enemyId:enemy.id, exploit, confirmed:false, revealed:false, strengthKnown:false };
     save();
   }
 }
 function resolveCampaign(){
   const c = state.campaign;
-  const {pos} = pushPosition();
-  const enemy = enemyById(c.enemyId);
+  const {pos, P, E} = pushPosition();
   const won = pos >= W.winThreshold;
+
+  if(c.type==="boss"){
+    const boss = bossById(c.bossId);
+    const bs = bossStateOf(c.bossId);
+    bs.attempts++; bs.lastAttempt = isoDate(new Date());
+    bs.lastWon = won; bs.lastMargin = (P&&E) ? P/E : null;
+    if(won){
+      bs.breached = true;
+      // flavor only — no currency, no XP, no badge change. Finish it for real.
+    } else {
+      state.regroup = { until: isoDate(new Date(Date.now()+W.regroup.days*86400000)), reason: boss.name };
+    }
+    state.bosses[c.bossId] = bs;
+    state.lastResult = { name:boss.name, won, pos:Math.round(pos*100), weekStart:c.weekStart, type:"boss" };
+    return;
+  }
+
+  const enemy = enemyById(c.enemyId);
   if(won){
     let mult = 1;
     if(hasResearch("ephorate-heralds-call")) mult *= 1.10;
@@ -994,9 +1137,11 @@ function resolveCampaign(){
     const extra = Math.round(W.skirmishReward.focusExtra*mult);
     for(const id of domainIds()) state.army.bonuses[id]=(state.army.bonuses[id]||0)+all;
     state.army.bonuses[enemy.focus]+=extra;
+  } else {
+    // light dip only: no cooldown, no currency loss — softer than a boss loss by design
+    state.skirmishDip = { until: isoDate(new Date(Date.now()+W.regroup.days*86400000)), penalty: W.skirmishLossPenalty };
   }
-  state.lastResult = { name:enemy.name, won, pos:Math.round(pos*100), weekStart:c.weekStart };
-  // loss is neutral by design — nothing rolls back, nothing is taken
+  state.lastResult = { name:enemy.name, won, pos:Math.round(pos*100), weekStart:c.weekStart, type:"skirmish" };
 }
 function reconCostNow(){
   if(hasResearch("krypteia-lakonic-silence")) return 5;
@@ -1026,65 +1171,87 @@ function doRecon(){
 function pushPosition(){
   const c = state.campaign;
   if(!c || !c.confirmed) return { pos:0.5, P:playerForce(null), E:null, exploitActive:false };
+  const k = W.pushK[state.formation]||W.pushK.wall;
+
+  if(c.type==="boss"){
+    const boss = bossById(c.bossId);
+    let P = playerForce(c, "boss");                       // boss-context research (Pyrriche etc.)
+    if(hasResearch("poliorcetics-helepolis")) P *= (1+W.boss.helepolisBonus);
+    if(c.sanction) P *= (1+W.boss.sanction.bonus);        // paid on engage, lasts the whole siege
+    const E = bossForce(boss);                            // fixed walls — bosses don't mirror your army
+    let pos = 0.5 + k*(P-E)/(P+E);
+    pos = Math.max(0.06, Math.min(0.94, pos));
+    return { pos, P, E, exploitActive:false, boss };
+  }
+
   const enemy = enemyById(c.enemyId);
   const P = playerForce(c, "push");
   let E = enemy.difficulty * playerForce(null); // neutral baseline — research force bonuses don't feed the enemy
   const exploitActive = readinessOf(c.exploit) < W.exploitThreshold;
   if(exploitActive) E *= (1+W.exploitBonus);
-  const k = W.pushK[state.formation]||W.pushK.wall;
   let pos = 0.5 + k*(P-E)/(P+E);
   pos = Math.max(0.06, Math.min(0.94, pos));
   return { pos, P, E, exploitActive };
 }
 
-/* ---- bosses ---- */
-function isBossBadge(b){ return W.bossGroups.includes(b.group); }
-function bossForce(badgeId){
-  const tier = W.bossTiers[badgeId]||2;
+/* ---- bosses (v4: push-line sieges) ---- */
+function bossById(id){ return W.bosses.find(b=>b.id===id); }
+function isBossBadge(b){ return W.bosses.some(x=>x.badges.includes(b.id)); }
+function bossForce(boss){
+  if(typeof boss==="string") boss = bossById(boss);
+  const tier = boss ? boss.tier : 2;
   return Math.round(W.boss.base * Math.pow(tier, W.boss.exponent));
 }
-function bossState(badgeId){
-  return state.bosses[badgeId] || { attempts:0, lastAttempt:null, breached:false, lastMargin:null };
+function bossStateOf(bossId){
+  return state.bosses[bossId] || { attempts:0, lastAttempt:null, breached:false, lastWon:null, lastMargin:null };
 }
-function bossCooldownUntil(bs){
-  if(!bs.lastAttempt || bs.breached || bs.lastWon) return null;
-  const d = new Date(bs.lastAttempt+"T12:00:00");
-  d.setDate(d.getDate()+W.regroup.days);
-  return d;
+function bossRoster(){ // every boss linked to ANY in-progress badge, one combined list
+  return W.bosses.filter(b=>b.badges.some(id=>{
+    const st = state.badges[id]; return st && st.status==="in-progress";
+  }));
 }
-function bossPlayerForce(){ // boss-context force, before The Sanction
+function bossPlayerForce(){ // projected boss-siege force, before The Sanction
   let P = playerForce(null, "boss");
   if(hasResearch("poliorcetics-helepolis")) P *= (1+W.boss.helepolisBonus);
   return P;
 }
-function attemptBoss(badgeId, badgeName){
-  const bs = bossState(badgeId);
-  const cd = bossCooldownUntil(bs);
-  if(cd && new Date()<cd){ toast("Regrouping — next assault "+isoDate(cd)); return; }
-  const need = bossForce(badgeId);
-  let P = bossPlayerForce();
-  // The Sanction: optional Intel spend for a one-fight weak point
+/* Damage stage 0-3: how far the line has pushed toward the player's victory.
+   progress = (pos-0.5)/0.44 maps neutral..max-push onto 0..1; thresholds at
+   0.25 / 0.5 / 0.75 of the way. */
+function bossDamageStage(pos){
+  const progress = Math.max(0, Math.min(1, (pos-0.5)/0.44));
+  return progress>=0.75 ? 3 : progress>=0.5 ? 2 : progress>=0.25 ? 1 : 0;
+}
+function engageBoss(bossId){
+  const boss = bossById(bossId);
+  if(!boss) return;
+  const bs = bossStateOf(bossId);
+  if(bs.breached){ toast("Already breached — finish it in the real world."); return; }
+  if(regroupActive()){ toast("Regrouping until "+state.regroup.until+" — the army can't march."); return; }
+  ensureCampaign(); // make sure the week has rolled before overriding it
+  const c = state.campaign;
+  if(c && c.type==="boss" && c.bossId===bossId){ toast("Already besieging "+boss.name); return; }
+  // The Sanction: optional Intel spend, lasts the whole siege
   let sanction = false;
   const sc = W.boss.sanction;
   if(hasResearch("krypteia-sanction") && balance("cyber")>=sc.cost){
-    sanction = confirm(`Deploy THE SANCTION?\n\nSpend ${sc.cost} Intel to expose a weak point: +${Math.round(sc.bonus*100)}% force, this assault only.`);
-    if(sanction) P *= (1+sc.bonus);
+    sanction = confirm(`Deploy THE SANCTION?\n\nSpend ${sc.cost} Intel to expose a weak point: +${Math.round(sc.bonus*100)}% force for this siege.`);
   }
-  const margin = P/need;
-  if(!confirm(`Assault ${badgeName}?\n\nYour force: ${Math.round(P)}${sanction?" (Sanction active)":""}\nTheir walls: ${need}\n\nA loss forces a regroup: -${regroupPenaltyNow()} readiness for ${W.regroup.days} days.`)) return;
-  if(sanction) state.army.spent.cyber += sc.cost; // only spent once the assault is actually launched
-  bs.attempts++; bs.lastAttempt = isoDate(new Date());
-  if(margin >= 1){
-    bs.breached = true; bs.lastWon = true; bs.lastMargin = margin;
-    const q = margin>=1.4 ? "DECISIVE VICTORY" : margin>=1.15 ? "SOLID VICTORY" : "NARROW VICTORY";
-    toast("Λ "+q+" — their lines are broken. Finish it in the real world.");
-  } else {
-    bs.lastWon = false; bs.lastMargin = margin;
-    state.regroup = { until: isoDate(new Date(Date.now()+W.regroup.days*86400000)), reason: badgeName };
-    toast("Repelled. Regroup: -"+regroupPenaltyNow()+" readiness for "+W.regroup.days+" days.");
-  }
-  state.bosses[badgeId]=bs;
+  const msg = `March on ${boss.name}?\n\nThis REPLACES this week's campaign — the skirmish and its reward are forfeited.\n\nTheir walls: ${bossForce(boss)}\nYour force: ${Math.round(bossPlayerForce()*(sanction?1+sc.bonus:1))}${sanction?" (Sanction active)":""}\n\nA loss at week's end: -${regroupPenaltyNow()} readiness + ${W.regroup.days}-day regroup.`;
+  if(!confirm(msg)) return;
+  if(sanction) state.army.spent.cyber += sc.cost; // only spent once the march is real
+  state.campaign = { weekStart: currentWeekStart(), type:"boss", bossId, confirmed:true, sanction };
+  save(); renderAll(); switchTab("war");
+  toast("The army marches on "+boss.name);
+}
+function standDown(){
+  const c = state.campaign;
+  if(!c || c.type!=="boss") return;
+  if(!confirm("Stand down from the siege? The week returns to the regular suggested skirmish (unconfirmed). Nothing is lost.")) return;
+  state.campaign = null;
+  ensureCampaign();
   save(); renderAll();
+  toast("The army stands down. The line reforms.");
 }
 
 /* ---- spending ---- */
@@ -1204,10 +1371,21 @@ function domainName(id){ const d=CONFIG.domains.find(d=>d.id===id); return d?d.n
    UI
    ===================================================================== */
 const $ = id => document.getElementById(id);
-function isoDate(d){ return d.toISOString().slice(0,10); }
+function isoDate(d){
+  // Local calendar date, NOT UTC. toISOString() converts to UTC first, which
+  // silently rolls the date forward on any evening load in a UTC-behind
+  // timezone (e.g. 9pm Central becomes 2am UTC the next day) — that mismatch
+  // is what was tearing down the weekly campaign on reload. Every date in the
+  // app (log entries, week starts, badge dates, boss cooldowns) flows through
+  // this one function, so fixing it here fixes all of them at once.
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
 
 /* ---------- tabs ---------- */
-const TABS = ["war","log","armory","research"];
+const TABS = ["war","log","armory","research","bosses","stats"];
 function switchTab(name){
   for(const t of TABS){
     $("tab-"+t).classList.toggle("active", t===name);
@@ -1249,9 +1427,26 @@ function renderCampaign(){
   const box = $("campaignBox"); box.innerHTML="";
   const c = state.campaign;
   if(!c) return; // ensureCampaign() runs on load; guard for fresh/imported states mid-flow
-  const enemy = enemyById(c.enemyId);
   const wkEnd = new Date(c.weekStart+"T12:00:00"); wkEnd.setDate(wkEnd.getDate()+6);
 
+  if(c.type==="boss"){
+    const boss = bossById(c.bossId);
+    const head = document.createElement("div"); head.className="campaign-head";
+    const left = document.createElement("div");
+    left.innerHTML = `<div class="wk">Week of ${c.weekStart} — ${isoDate(wkEnd)} · BOSS SIEGE</div>
+      <div class="foe">${boss.name}</div>
+      <div class="flavor">${boss.flavor} Walls: ${bossForce(boss)}.${c.sanction?" The Sanction is active.":""}</div>`;
+    head.appendChild(left);
+    const sd = document.createElement("button"); sd.className="btn-ghost";
+    sd.textContent = "Stand down";
+    sd.onclick = standDown;
+    head.appendChild(sd);
+    box.appendChild(head);
+    appendCampaignFooters(box);
+    return;
+  }
+
+  const enemy = enemyById(c.enemyId);
   const head = document.createElement("div"); head.className="campaign-head";
   const left = document.createElement("div");
   left.innerHTML = `<div class="wk">Week of ${c.weekStart} — ${isoDate(wkEnd)}</div>
@@ -1314,19 +1509,35 @@ function renderCampaign(){
     box.appendChild(el);
   }
 
+  appendCampaignFooters(box);
+}
+function appendCampaignFooters(box){
+  // shared tail for both campaign views (results, regroup, dip)
   if(state.lastResult){
     const r = state.lastResult;
     const el = document.createElement("div");
     el.className = "last-result "+(r.won?"won":"lost");
-    el.textContent = r.won
-      ? `LAST WEEK: ${r.name} — LINE HELD at ${r.pos}%. Spoils banked.`
-      : `LAST WEEK: ${r.name} — they held at ${r.pos}%. No losses. The line reforms.`;
+    if(r.type==="boss"){
+      el.textContent = r.won
+        ? `LAST WEEK: ${r.name} — BREACHED at ${r.pos}%. Finish it in the real world.`
+        : `LAST WEEK: ${r.name} — repelled us at ${r.pos}%. The army regroups.`;
+    } else {
+      el.textContent = r.won
+        ? `LAST WEEK: ${r.name} — LINE HELD at ${r.pos}%. Spoils banked.`
+        : `LAST WEEK: ${r.name} — they held at ${r.pos}%. Light losses. The line reforms.`;
+    }
     box.appendChild(el);
   }
   if(regroupActive()){
     const el = document.createElement("div");
     el.className="last-result lost";
     el.textContent = `REGROUPING after ${state.regroup.reason} — readiness -${regroupPenaltyNow()} until ${state.regroup.until}.`;
+    box.appendChild(el);
+  }
+  if(skirmishDipActive()){
+    const el = document.createElement("div");
+    el.className="last-result lost";
+    el.textContent = `BRUISED — readiness -${state.skirmishDip.penalty} until ${state.skirmishDip.until}. No cooldown.`;
     box.appendChild(el);
   }
 }
@@ -1338,12 +1549,82 @@ function svgEl(tag, attrs){
   for(const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
   return el;
 }
+/* ---- boss archetype renderers ----
+   Flat geometric SVG, same idiom as the spear ranks. Each draws into the
+   enemy group at contact-relative coords (+x side, standing on `ground`)
+   and degrades by bossDamageStage(pos): 0 = untouched, 3 = nearly broken. */
+const CRACK = "#c4544a"; // coral crack/damage tone, same as the enemy meta color
+function renderColossus(g, pos, ground){
+  const stage = bossDamageStage(pos);
+  // 4 chunks: legs, torso, shoulder block, head — each threshold breaks one
+  const chunk = (x,y,w,h,broken)=>{
+    g.appendChild(svgEl("rect",{x,y,width:w,height:h,
+      fill: broken?CRACK:"#8E2A22", opacity: broken?0.30:0.9 }));
+    if(broken) g.appendChild(svgEl("line",{x1:x,y1:y+h*0.4,x2:x+w,y2:y+h*0.7,stroke:CRACK,"stroke-width":1.5,opacity:.8}));
+  };
+  chunk(34, ground-34, 44, 34, stage>=3);           // legs — last to fall
+  chunk(28, ground-78, 56, 40, stage>=2);           // torso
+  chunk(20, ground-92, 72, 12, stage>=1);           // shoulder block — first crack
+  chunk(44, ground-114, 24, 20, stage>=2);          // head
+  // ground rubble appears as it breaks
+  for(let i=0;i<stage;i++)
+    g.appendChild(svgEl("rect",{x:96+i*14,y:ground-8-(i%2)*4,width:10,height:8,fill:CRACK,opacity:.5}));
+}
+function renderHydra(g, pos, ground){
+  const stage = bossDamageStage(pos);
+  // 3 necks: bezier paths ending in triangle heads; each threshold kills one
+  const necks = [
+    { x0:60, cx:30,  cy:ground-95, x1:26,  y1:ground-98, sway:true },
+    { x0:70, cx:70,  cy:ground-120,x1:64,  y1:ground-116, sway:true },
+    { x0:80, cx:112, cy:ground-90, x1:112, y1:ground-96, sway:true },
+  ];
+  // body mound
+  g.appendChild(svgEl("path",{d:`M 40 ${ground} Q 70 ${ground-46} 100 ${ground} Z`,fill:"#8E2A22",opacity:.9}));
+  necks.forEach((n,i)=>{
+    const dead = i < stage;                          // heads die front-to-back
+    const col  = dead ? "#555b63" : "#8E2A22";
+    const op   = dead ? 0.35 : 0.9;
+    g.appendChild(svgEl("path",{
+      d:`M ${n.x0} ${ground-20} Q ${n.cx} ${n.cy} ${n.x1} ${n.y1}`,
+      fill:"none", stroke:col, "stroke-width":7, "stroke-linecap":"round", opacity:op }));
+    const head = svgEl("polygon",{
+      points:`${n.x1-9},${n.y1} ${n.x1+9},${n.y1} ${n.x1},${n.y1-14}`,
+      fill:col, opacity:op });
+    if(!dead) head.setAttribute("class","hydra-head-live"); // dead heads stop animating
+    g.appendChild(head);
+  });
+}
+function renderRivalArmy(g, pos, ground){
+  const stage = bossDamageStage(pos);
+  // pole + triangular banner + sigil; thresholds tear the banner and fade the sigil
+  g.appendChild(svgEl("line",{x1:40,y1:ground,x2:40,y2:ground-110,stroke:"#8E2A22","stroke-width":4,opacity:.9}));
+  const gap = stage*9;                               // widening tear
+  const bOp = stage>=3 ? 0.35 : 0.9;
+  // banner splits into two polygons around a jagged tear
+  g.appendChild(svgEl("polygon",{
+    points:`42,${ground-108} ${74-gap/2},${ground-100} ${66-gap/2},${ground-84} 42,${ground-76}`,
+    fill:"#8E2A22", opacity:bOp }));
+  g.appendChild(svgEl("polygon",{
+    points:`${80+gap/2},${ground-99} 118,${ground-92} ${88+gap/2},${ground-83}`,
+    fill:"#8E2A22", opacity: stage>=1 ? bOp*0.8 : bOp }));
+  // sigil: small diamond on the banner, fading with damage
+  g.appendChild(svgEl("polygon",{
+    points:`54,${ground-98} 61,${ground-92} 54,${ground-86} 47,${ground-92}`,
+    fill:CRACK, opacity: Math.max(0.08, 0.9 - stage*0.3) }));
+  // a thin honor guard beneath the banner, thinning as it tears
+  for(let i=0;i<3-Math.min(2,stage);i++){
+    const x = 60+i*20;
+    g.appendChild(svgEl("polygon",{points:`${x+10},${ground-22} ${x+10},${ground-6} ${x-2},${ground-14}`,fill:"#8E2A22",opacity:.6}));
+  }
+}
+const BOSS_RENDERERS = { colossus:renderColossus, hydra:renderHydra, rival:renderRivalArmy };
+
 function renderPushLine(){
   const svg = $("pushSvg"); svg.innerHTML="";
   const meta = $("pushMeta"); meta.innerHTML="";
   const note = $("standoffNote");
   const c = state.campaign;
-  const {pos, P, E, exploitActive} = pushPosition();
+  const {pos, P, E, exploitActive, boss} = pushPosition();
   const Wd=700, Hd=150, ground=128;
 
   // ground line
@@ -1359,8 +1640,6 @@ function renderPushLine(){
 
   const troopsTotal = armySizeTotal();
   const pCols = Math.max(2, Math.min(14, Math.round(troopsTotal/3)));
-  const ratio = confirmed && E ? E/P : 1;
-  const eCols = Math.max(2, Math.min(14, Math.round(pCols*ratio)));
   const rows=3, colW=16, rowH=26, topY=ground-rows*rowH+6;
 
   for(let cix=0;cix<pCols;cix++){
@@ -1373,14 +1652,21 @@ function renderPushLine(){
       gPlayer.appendChild(svgEl("line",{x1:x-10,y1:y+2,x2:x+8,y2:y+8,stroke:"var(--bone)","stroke-width":1,opacity:.5}));
     }
   }
-  for(let cix=0;cix<eCols;cix++){
-    for(let r=0;r<rows;r++){
-      const x = 14 + cix*colW, y = topY + r*rowH + (cix%2?7:0);
-      gEnemy.appendChild(svgEl("polygon",{
-        points:`${x+10},${y} ${x+10},${y+16} ${x-2},${y+8}`,
-        fill:"#8E2A22", opacity: Math.max(.35, 1-cix*.05),
-      }));
-      gEnemy.appendChild(svgEl("line",{x1:x+10,y1:y+2,x2:x-8,y2:y+8,stroke:"#c4544a","stroke-width":1,opacity:.5}));
+  if(boss){
+    // boss campaign: the archetype stands where the spear ranks would
+    (BOSS_RENDERERS[boss.archetype]||renderColossus)(gEnemy, pos, ground);
+  } else {
+    const ratio = confirmed && E ? E/P : 1;
+    const eCols = Math.max(2, Math.min(14, Math.round(pCols*ratio)));
+    for(let cix=0;cix<eCols;cix++){
+      for(let r=0;r<rows;r++){
+        const x = 14 + cix*colW, y = topY + r*rowH + (cix%2?7:0);
+        gEnemy.appendChild(svgEl("polygon",{
+          points:`${x+10},${y} ${x+10},${y+16} ${x-2},${y+8}`,
+          fill:"#8E2A22", opacity: Math.max(.35, 1-cix*.05),
+        }));
+        gEnemy.appendChild(svgEl("line",{x1:x+10,y1:y+2,x2:x-8,y2:y+8,stroke:"#c4544a","stroke-width":1,opacity:.5}));
+      }
     }
   }
   gLine.appendChild(svgEl("line",{x1:0,y1:12,x2:0,y2:ground,stroke:"var(--bone)","stroke-width":1.5,"stroke-dasharray":"4 4",opacity:.8}));
@@ -1396,8 +1682,13 @@ function renderPushLine(){
   if(confirmed){
     note.style.display="none";
     const pctP = Math.round(pos*100);
-    meta.innerHTML = `<span class="p">YOUR LINE — force ${Math.round(P)} · holding ${pctP}% of the field</span>
-      <span class="e">${enemyById(c.enemyId).name}${exploitActive && c.revealed?" · EXPLOITING":""}${c.strengthKnown?` · force ${Math.round(E)}`:""}</span>`;
+    if(boss){
+      meta.innerHTML = `<span class="p">YOUR LINE — force ${Math.round(P)} · holding ${pctP}% of the field</span>
+        <span class="e">${boss.name} · walls ${Math.round(E)}${c.sanction?" · SANCTIONED":""}</span>`;
+    } else {
+      meta.innerHTML = `<span class="p">YOUR LINE — force ${Math.round(P)} · holding ${pctP}% of the field</span>
+        <span class="e">${enemyById(c.enemyId).name}${exploitActive && c.revealed?" · EXPLOITING":""}${c.strengthKnown?` · force ${Math.round(E)}`:""}</span>`;
+    }
   } else {
     note.style.display="block";
     note.textContent = "Standoff — confirm this week's campaign to engage.";
@@ -1505,32 +1796,75 @@ function renderArmory(){
       el.onclick = cycle;
       el.onkeydown = ev=>{ if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); cycle(); } };
 
-      // boss strip: only for in-progress badges in boss groups
-      if(isBossBadge(b) && st.status==="in-progress"){
-        const bs = bossState(b.id);
-        const need = bossForce(b.id);
-        let P = bossPlayerForce();
-        const cd = bossCooldownUntil(bs);
-        const onCd = cd && new Date()<cd;
-        const strip = document.createElement("div"); strip.className="boss-strip";
-        let lines = `<span class="b-title">⚔ ACTIVE SIEGE</span><br>walls ${need} · your force ${Math.round(P)} `;
-        lines += P>=need ? `<span class="ok">— breach possible</span>` : `<span class="warn">— under-prepared</span>`;
-        if(bs.attempts) lines += `<br>attempts ${bs.attempts}${bs.breached?` · <span class="ok">lines broken — finish it for real</span>`:""}`;
-        if(onCd) lines += `<br><span class="warn">regrouping until ${isoDate(cd)}</span>`;
-        strip.innerHTML = lines;
-        if(!bs.breached){
-          const atk = document.createElement("button"); atk.className="btn-war";
-          atk.textContent = onCd ? "Regrouping…" : "Assault";
-          atk.disabled = onCd;
-          atk.onclick = ev=>{ ev.stopPropagation(); attemptBoss(b.id, b.name); };
-          strip.appendChild(atk);
-        }
-        strip.onclick = ev=>ev.stopPropagation();
-        el.appendChild(strip);
-      }
+      // sieges moved to the Bosses tab (v4) — badges here keep only their
+      // planned / in-progress / achieved cycle, exactly as before
       grid.appendChild(el);
     }
     wrap.appendChild(grid); host.appendChild(wrap);
+  }
+}
+
+/* ---------- bosses tab (v4) ---------- */
+function renderBosses(){
+  const note = $("bossNote"), host = $("bossList");
+  if(!note || !host) return;
+  host.innerHTML="";
+  const roster = bossRoster();
+  if(!roster.length){
+    note.textContent = "No active sieges. Mark a certification or career badge as in-progress in the Armory and its bosses take the field.";
+    return;
+  }
+  note.textContent = "One combined roster from every in-progress badge. Engaging a boss replaces this week's campaign — the skirmish and its reward are forfeited — and resolves on the push line at week's end. A loss costs -"+regroupPenaltyNow()+" readiness and a "+W.regroup.days+"-day regroup; a win breaches the boss in-game only.";
+  const c = state.campaign;
+  const myForce = bossPlayerForce();
+  for(const boss of roster){
+    const bs = bossStateOf(boss.id);
+    const engaged = c && c.type==="boss" && c.bossId===boss.id;
+    const walls = bossForce(boss);
+    const el = document.createElement("div");
+    el.className = "boss-card"+(engaged?" engaged":"")+(bs.breached?" breached":"");
+
+    // archetype preview — live damage state if engaged this week, pristine otherwise
+    const svg = svgEl("svg",{viewBox:"0 0 160 140", class:"b-svg","aria-hidden":"true"});
+    const g = svgEl("g",{});
+    svg.appendChild(svgEl("line",{x1:0,y1:128,x2:160,y2:128,stroke:"var(--rivet)","stroke-width":2}));
+    const previewPos = engaged ? pushPosition().pos : 0.5;
+    (BOSS_RENDERERS[boss.archetype]||renderColossus)(g, previewPos, 128);
+    // renderers draw at +x from contact; shift left so the figure centers in the card
+    g.setAttribute("transform","translate(10,0)");
+    svg.appendChild(g);
+    el.appendChild(svg);
+
+    const badgeNames = boss.badges.map(badgeName).join(" / ");
+    const readyTxt = myForce>=walls
+      ? `<span class="ok">breach possible</span>`
+      : `<span class="warn">under-prepared</span>`;
+    let statLines = `walls ${walls} · your force ${Math.round(myForce)} — ${readyTxt}`;
+    if(bs.attempts) statLines += `<br>sieges ${bs.attempts}${bs.lastMargin?` · last margin ${bs.lastMargin.toFixed(2)}`:""}`;
+    if(bs.breached) statLines += `<br><span class="ok">BREACHED — finish it in the real world</span>`;
+    else if(engaged) statLines += `<br><span class="bad">UNDER SIEGE — resolves at week's end</span>`;
+
+    const info = document.createElement("div");
+    info.innerHTML = `<div class="b-name">${boss.name}</div>
+      <div class="b-badge">Tier ${boss.tier} · ${boss.archetype==="rival"?"rival army":boss.archetype} · gate: ${badgeNames}</div>
+      <div class="b-flavor">${boss.flavor}</div>
+      <div class="b-stats">${statLines}</div>`;
+    el.appendChild(info);
+
+    if(!bs.breached){
+      const btn = document.createElement("button");
+      if(engaged){
+        btn.className="btn-ghost"; btn.textContent="Stand down";
+        btn.onclick = standDown;
+      } else {
+        btn.className="btn-war"; btn.textContent="Engage";
+        btn.disabled = regroupActive();
+        btn.title = regroupActive() ? "Regrouping until "+state.regroup.until : "";
+        btn.onclick = ()=>engageBoss(boss.id);
+      }
+      el.appendChild(btn);
+    }
+    host.appendChild(el);
   }
 }
 
@@ -1714,6 +2048,175 @@ function renderResearch(){
   refreshResearchGraph();
 }
 
+/* ---------- stats tab (v5) ---------- */
+/* Read-only visualization over state.log / state.badges. No new state fields,
+   no schema bump. The calendar month cursor is a plain JS variable — it
+   resets to the current month on every load, which is the desired default.
+   Two different week concepts appear in this app; the Stats tab uses the
+   CALENDAR week (Mon-Sun, same as campaigns/skirmishes), NOT the trailing
+   7-day window that momentum and readiness use. UI copy keeps them apart. */
+let statsCalMonth = null;     // {y, m} with m 0-based; null = current month
+let statsSelectedDay = null;  // ISO date string of the clicked calendar cell
+
+function statsWeekDates(){    // Mon..Sun of the current calendar week
+  const start = new Date(currentWeekStart()+"T12:00:00");
+  const out = [];
+  for(let i=0;i<7;i++){ const d=new Date(start); d.setDate(d.getDate()+i); out.push(isoDate(d)); }
+  return out;
+}
+function statsWeekTotals(){   // {domainId: xp} for the current calendar week
+  const days = new Set(statsWeekDates());
+  const totals = {};
+  for(const d of CONFIG.domains) totals[d.id]=0;
+  for(const e of state.log) if(days.has(e.date)) totals[e.domain]=(totals[e.domain]||0)+e.awarded;
+  return totals;
+}
+function dayXpTotals(){       // {dateStr: xp} across the whole log
+  const t = {};
+  for(const e of state.log) t[e.date]=(t[e.date]||0)+e.awarded;
+  return t;
+}
+function levelUpDates(){      // Set of dates on which the character level rose
+  const t = dayXpTotals();
+  const dates = Object.keys(t).sort();
+  const out = new Set();
+  let cum=0, lvl=1;
+  for(const d of dates){
+    cum += t[d];
+    const l = levelFromXp(cum);
+    if(l>lvl){ out.add(d); lvl=l; }
+  }
+  return out;
+}
+function badgeDates(){        // {dateStr: [badge names achieved that day]}
+  const out = {};
+  for(const b of CONFIG.badges){
+    const st = state.badges[b.id];
+    if(st && st.status==="achieved" && st.date){
+      if(!out[st.date]) out[st.date]=[];
+      out[st.date].push(b.name);
+    }
+  }
+  return out;
+}
+function daysSinceLastLog(){  // whole days since the most recent log date; null if empty
+  if(!state.log.length) return null;
+  let last=""; for(const e of state.log) if(e.date>last) last=e.date;
+  const ms = new Date(isoDate(new Date())+"T12:00:00") - new Date(last+"T12:00:00");
+  return Math.max(0, Math.round(ms/86400000));
+}
+function statsIntensity(xp){  // 3-step shade scale, deliberately coarse
+  if(xp<=0) return 0;
+  if(xp<150) return 1;
+  if(xp<400) return 2;
+  return 3;
+}
+function renderStatsWeek(){
+  const host = $("statsWeek"); host.innerHTML="";
+  const totals = statsWeekTotals();
+  const wk = statsWeekDates();
+  const weekTotal = CONFIG.domains.reduce((s,d)=>s+(totals[d.id]||0),0);
+  const since = daysSinceLastLog();
+
+  const sum = document.createElement("div"); sum.className="stats-summary";
+  sum.innerHTML =
+    `<div class="stat"><b class="mono">${weekTotal.toLocaleString()}</b><span>XP this week</span></div>`+
+    `<div class="stat"><b class="mono">+${Math.round(momentumBonus(new Date())*100)}%</b><span>Momentum (trailing 7)</span></div>`+
+    `<div class="stat"><b class="mono">${since===null?"—":since===0?"today":since+"d ago"}</b><span>Last log</span></div>`;
+  host.appendChild(sum);
+
+  const note = document.createElement("div"); note.className="stats-note";
+  note.textContent = `Calendar week ${wk[0]} — ${wk[6]} (Mon–Sun, same window as campaigns). `+
+    `Momentum is different — it counts the trailing 7 days, not this week.`;
+  host.appendChild(note);
+
+  const max = Math.max(1, ...CONFIG.domains.map(d=>totals[d.id]||0));
+  for(const d of CONFIG.domains){
+    const xp = totals[d.id]||0;
+    const row = document.createElement("div"); row.className="domain";
+    row.innerHTML = `<div class="row"><b>${d.name}</b><span>${xp.toLocaleString()} XP</span></div>
+      <div class="bar"><i style="width:${Math.round(xp/max*100)}%"></i></div>`;
+    host.appendChild(row);
+  }
+}
+function renderStatsCalendar(){
+  const host = $("statsCal"); host.innerHTML="";
+  const now = new Date();
+  const cur = statsCalMonth || { y:now.getFullYear(), m:now.getMonth() };
+  const y = cur.y, m = cur.m;
+  const totals = dayXpTotals();
+  const lvlUps = levelUpDates();
+  const bDates = badgeDates();
+  const today = isoDate(now);
+
+  const head = document.createElement("div"); head.className="cal-head";
+  const prev = document.createElement("button"); prev.className="btn-ghost"; prev.textContent="← prev";
+  const next = document.createElement("button"); next.className="btn-ghost"; next.textContent="next →";
+  const title = document.createElement("b");
+  title.textContent = new Date(y, m, 1).toLocaleString("en-US",{month:"long",year:"numeric"});
+  prev.onclick = ()=>{ statsCalMonth = m===0 ? {y:y-1,m:11} : {y:y,m:m-1}; statsSelectedDay=null; renderStatsCalendar(); };
+  next.onclick = ()=>{ statsCalMonth = m===11 ? {y:y+1,m:0} : {y:y,m:m+1}; statsSelectedDay=null; renderStatsCalendar(); };
+  head.appendChild(prev); head.appendChild(title); head.appendChild(next);
+  host.appendChild(head);
+
+  const grid = document.createElement("div"); grid.className="cal-grid";
+  for(const wd of ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]){
+    const h = document.createElement("div"); h.className="cal-wd"; h.textContent=wd; grid.appendChild(h);
+  }
+  const lead = (new Date(y, m, 1).getDay()+6)%7;   // Monday-first, matching campaign weeks
+  for(let i=0;i<lead;i++){ const c=document.createElement("div"); c.className="cal-cell empty"; grid.appendChild(c); }
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  for(let day=1; day<=daysInMonth; day++){
+    const ds = isoDate(new Date(y, m, day));
+    const xp = totals[ds]||0;
+    const c = document.createElement("div");
+    c.className = "cal-cell i"+statsIntensity(xp);
+    if(ds===today) c.classList.add("today");
+    if(statsSelectedDay===ds) c.classList.add("sel");
+    let marks = "";
+    if(lvlUps.has(ds)) marks += '<span class="mk-lvl" title="Level up">Λ</span>';
+    if(bDates[ds]) marks += '<span class="mk-badge" title="'+escapeHtml(bDates[ds].join(", "))+'">◆</span>';
+    c.innerHTML = `<span class="dnum">${day}</span><span class="mks">${marks}</span>`;
+    if(xp>0 || bDates[ds]){
+      c.classList.add("has");
+      c.title = xp+" XP — click for the day's log";
+      c.onclick = ()=>{ statsSelectedDay = (statsSelectedDay===ds) ? null : ds; renderStatsCalendar(); };
+    }
+    grid.appendChild(c);
+  }
+  host.appendChild(grid);
+
+  const leg = document.createElement("div"); leg.className="cal-legend";
+  leg.innerHTML = `<span><i class="i1"></i>&lt;150 XP</span><span><i class="i2"></i>150–399</span>`+
+    `<span><i class="i3"></i>400+</span><span><b class="mk-lvl">Λ</b> level up</span>`+
+    `<span><b class="mk-badge">◆</b> badge achieved</span>`;
+  host.appendChild(leg);
+
+  if(statsSelectedDay){
+    const det = document.createElement("div"); det.className="cal-detail";
+    const dh = document.createElement("div"); dh.className="cal-day-head";
+    dh.textContent = statsSelectedDay + " — " + (totals[statsSelectedDay]||0) + " XP";
+    det.appendChild(dh);
+    const ul = document.createElement("ul"); ul.className="log-list";
+    for(const name of (bDates[statsSelectedDay]||[])){
+      const li = document.createElement("li"); li.className="cal-badge-line";
+      li.innerHTML = `<span>Λ Badge achieved — ${escapeHtml(name)}</span>`;
+      ul.appendChild(li);
+    }
+    const entries = state.log.filter(e=>e.date===statsSelectedDay).sort((a,b)=>a.ts.localeCompare(b.ts));
+    for(const e of entries){
+      const act = activityById(e.domain, e.activity);
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="what">${act?act.name:e.activity}${e.note?" — "+escapeHtml(e.note):""}</span>
+        <span class="xp">+${e.awarded}</span>`;
+      ul.appendChild(li);
+    }
+    det.appendChild(ul);
+    host.appendChild(det);
+  }
+}
+function renderStats(){ renderStatsWeek(); renderStatsCalendar(); }
+
 /* ---------- log tab (preserved from v1) ---------- */
 function renderDomains(){
   const today = isoDate(new Date());
@@ -1821,7 +2324,7 @@ function renderAll(){
   renderHeader();
   renderCampaign(); renderWarSummary(); renderPushLine(); renderUnits();
   renderDomains(); renderLog();
-  renderArmory(); renderResearch();
+  renderArmory(); renderResearch(); renderBosses(); renderStats();
 }
 
 $("logBtn").onclick = logEntry;
