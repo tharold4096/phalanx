@@ -48,6 +48,13 @@
       wedge -> ephorate-wedge-formation); nodes with no successor are refunded
       in full to currency bonuses. Nothing is ever just taken away.
 
+  STATS TAB (v5):
+    - Read-only visualization layer over state.log / state.badges: weekly XP
+      by domain (current CALENDAR week, Mon-Sun, same as campaigns — NOT the
+      trailing-7 momentum window) and a month calendar shaded by daily XP,
+      with Λ markers for level-ups and ◆ for badge achievements. Hand-rolled
+      CSS/HTML, no new dependency, no new state fields, no schema bump.
+
   DATA: localStorage (phalanx-save-v1 key kept for continuity), schema version 3.
   v1/v2 saves migrate automatically. Export/import unchanged (import confirms,
   never silently overwrites, and migrates incoming files too).
@@ -189,6 +196,40 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .boss-card button{margin-top:auto}
 .hydra-head-live{animation:hydra-sway 3s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:bottom center}
 @keyframes hydra-sway{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
+
+/* ---------- stats tab (v5) ---------- */
+.stats-summary{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:8px}
+.stats-summary .stat b{display:block;font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--bone)}
+.stats-summary .stat span{font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+.stats-note{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;color:var(--ash);margin-bottom:14px;line-height:1.6}
+.cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.cal-head b{font-family:'Chakra Petch',sans-serif;color:var(--bone);letter-spacing:.06em;font-size:15px}
+.cal-head button{padding:6px 14px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-wd{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--ash);text-align:center;padding-bottom:4px}
+.cal-cell{position:relative;aspect-ratio:1/1;min-height:34px;border:1px solid var(--rivet);border-radius:3px;background:var(--iron)}
+.cal-cell.empty{border-color:transparent;background:transparent}
+.cal-cell.i1{background:rgba(196,104,43,.14)}
+.cal-cell.i2{background:rgba(196,104,43,.32)}
+.cal-cell.i3{background:rgba(196,104,43,.55)}
+.cal-cell.today{border-color:var(--bronze)}
+.cal-cell.sel{border-color:var(--bone)}
+.cal-cell.has{cursor:pointer}
+.cal-cell.has:hover{border-color:var(--bronze)}
+.cal-cell .dnum{position:absolute;top:3px;left:5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ash)}
+.cal-cell.i2 .dnum,.cal-cell.i3 .dnum{color:var(--bone)}
+.cal-cell .mks{position:absolute;bottom:2px;right:4px;font-size:10px;display:flex;gap:2px;line-height:1}
+.mk-lvl{color:var(--bronze);font-family:'Chakra Petch',sans-serif;font-weight:700}
+.mk-badge{color:var(--moss)}
+.cal-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.05em;align-items:center;color:var(--ash)}
+.cal-legend span{display:flex;align-items:center;gap:5px}
+.cal-legend i{width:11px;height:11px;border-radius:2px;display:block;border:1px solid var(--rivet)}
+.cal-legend i.i1{background:rgba(196,104,43,.14)}
+.cal-legend i.i2{background:rgba(196,104,43,.32)}
+.cal-legend i.i3{background:rgba(196,104,43,.55)}
+.cal-detail{margin-top:12px}
+.cal-detail .cal-day-head{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--bronze);letter-spacing:.05em;margin-bottom:4px}
+.cal-detail .cal-badge-line{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;font-size:12px;border-bottom:1px solid var(--rivet);color:var(--moss)}
 
 /* ---------- log history ---------- */
 .log-list{list-style:none;max-height:300px;overflow-y:auto}
@@ -336,6 +377,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
   <button id="tabBtn-armory" role="tab">Armory</button>
   <button id="tabBtn-research" role="tab">Research</button>
   <button id="tabBtn-bosses" role="tab">Bosses</button>
+  <button id="tabBtn-stats" role="tab">Stats</button>
 </nav>
 
 <!-- ============ WAR ROOM ============ -->
@@ -420,6 +462,18 @@ button:disabled{opacity:.4;cursor:not-allowed}
       <span class="cy-hint">engaging a boss replaces this week's campaign</span></h2>
     <div class="boss-note" id="bossNote"></div>
     <div class="bosses" id="bossList"></div>
+  </div>
+</section>
+
+<!-- ============ STATS ============ -->
+<section class="tab" id="tab-stats">
+  <div class="panel">
+    <h2>This Week <span class="accent">//</span> By Domain</h2>
+    <div id="statsWeek"></div>
+  </div>
+  <div class="panel">
+    <h2>Campaign Record <span class="accent">//</span> Calendar</h2>
+    <div id="statsCal"></div>
   </div>
 </section>
 
@@ -1330,7 +1384,7 @@ function isoDate(d){
 }
 
 /* ---------- tabs ---------- */
-const TABS = ["war","log","armory","research","bosses"];
+const TABS = ["war","log","armory","research","bosses","stats"];
 function switchTab(name){
   for(const t of TABS){
     $("tab-"+t).classList.toggle("active", t===name);
@@ -1993,6 +2047,175 @@ function renderResearch(){
   refreshResearchGraph();
 }
 
+/* ---------- stats tab (v5) ---------- */
+/* Read-only visualization over state.log / state.badges. No new state fields,
+   no schema bump. The calendar month cursor is a plain JS variable — it
+   resets to the current month on every load, which is the desired default.
+   Two different week concepts appear in this app; the Stats tab uses the
+   CALENDAR week (Mon-Sun, same as campaigns/skirmishes), NOT the trailing
+   7-day window that momentum and readiness use. UI copy keeps them apart. */
+let statsCalMonth = null;     // {y, m} with m 0-based; null = current month
+let statsSelectedDay = null;  // ISO date string of the clicked calendar cell
+
+function statsWeekDates(){    // Mon..Sun of the current calendar week
+  const start = new Date(currentWeekStart()+"T12:00:00");
+  const out = [];
+  for(let i=0;i<7;i++){ const d=new Date(start); d.setDate(d.getDate()+i); out.push(isoDate(d)); }
+  return out;
+}
+function statsWeekTotals(){   // {domainId: xp} for the current calendar week
+  const days = new Set(statsWeekDates());
+  const totals = {};
+  for(const d of CONFIG.domains) totals[d.id]=0;
+  for(const e of state.log) if(days.has(e.date)) totals[e.domain]=(totals[e.domain]||0)+e.awarded;
+  return totals;
+}
+function dayXpTotals(){       // {dateStr: xp} across the whole log
+  const t = {};
+  for(const e of state.log) t[e.date]=(t[e.date]||0)+e.awarded;
+  return t;
+}
+function levelUpDates(){      // Set of dates on which the character level rose
+  const t = dayXpTotals();
+  const dates = Object.keys(t).sort();
+  const out = new Set();
+  let cum=0, lvl=1;
+  for(const d of dates){
+    cum += t[d];
+    const l = levelFromXp(cum);
+    if(l>lvl){ out.add(d); lvl=l; }
+  }
+  return out;
+}
+function badgeDates(){        // {dateStr: [badge names achieved that day]}
+  const out = {};
+  for(const b of CONFIG.badges){
+    const st = state.badges[b.id];
+    if(st && st.status==="achieved" && st.date){
+      if(!out[st.date]) out[st.date]=[];
+      out[st.date].push(b.name);
+    }
+  }
+  return out;
+}
+function daysSinceLastLog(){  // whole days since the most recent log date; null if empty
+  if(!state.log.length) return null;
+  let last=""; for(const e of state.log) if(e.date>last) last=e.date;
+  const ms = new Date(isoDate(new Date())+"T12:00:00") - new Date(last+"T12:00:00");
+  return Math.max(0, Math.round(ms/86400000));
+}
+function statsIntensity(xp){  // 3-step shade scale, deliberately coarse
+  if(xp<=0) return 0;
+  if(xp<150) return 1;
+  if(xp<400) return 2;
+  return 3;
+}
+function renderStatsWeek(){
+  const host = $("statsWeek"); host.innerHTML="";
+  const totals = statsWeekTotals();
+  const wk = statsWeekDates();
+  const weekTotal = CONFIG.domains.reduce((s,d)=>s+(totals[d.id]||0),0);
+  const since = daysSinceLastLog();
+
+  const sum = document.createElement("div"); sum.className="stats-summary";
+  sum.innerHTML =
+    `<div class="stat"><b class="mono">${weekTotal.toLocaleString()}</b><span>XP this week</span></div>`+
+    `<div class="stat"><b class="mono">+${Math.round(momentumBonus(new Date())*100)}%</b><span>Momentum (trailing 7)</span></div>`+
+    `<div class="stat"><b class="mono">${since===null?"—":since===0?"today":since+"d ago"}</b><span>Last log</span></div>`;
+  host.appendChild(sum);
+
+  const note = document.createElement("div"); note.className="stats-note";
+  note.textContent = `Calendar week ${wk[0]} — ${wk[6]} (Mon–Sun, same window as campaigns). `+
+    `Momentum is different — it counts the trailing 7 days, not this week.`;
+  host.appendChild(note);
+
+  const max = Math.max(1, ...CONFIG.domains.map(d=>totals[d.id]||0));
+  for(const d of CONFIG.domains){
+    const xp = totals[d.id]||0;
+    const row = document.createElement("div"); row.className="domain";
+    row.innerHTML = `<div class="row"><b>${d.name}</b><span>${xp.toLocaleString()} XP</span></div>
+      <div class="bar"><i style="width:${Math.round(xp/max*100)}%"></i></div>`;
+    host.appendChild(row);
+  }
+}
+function renderStatsCalendar(){
+  const host = $("statsCal"); host.innerHTML="";
+  const now = new Date();
+  const cur = statsCalMonth || { y:now.getFullYear(), m:now.getMonth() };
+  const y = cur.y, m = cur.m;
+  const totals = dayXpTotals();
+  const lvlUps = levelUpDates();
+  const bDates = badgeDates();
+  const today = isoDate(now);
+
+  const head = document.createElement("div"); head.className="cal-head";
+  const prev = document.createElement("button"); prev.className="btn-ghost"; prev.textContent="← prev";
+  const next = document.createElement("button"); next.className="btn-ghost"; next.textContent="next →";
+  const title = document.createElement("b");
+  title.textContent = new Date(y, m, 1).toLocaleString("en-US",{month:"long",year:"numeric"});
+  prev.onclick = ()=>{ statsCalMonth = m===0 ? {y:y-1,m:11} : {y:y,m:m-1}; statsSelectedDay=null; renderStatsCalendar(); };
+  next.onclick = ()=>{ statsCalMonth = m===11 ? {y:y+1,m:0} : {y:y,m:m+1}; statsSelectedDay=null; renderStatsCalendar(); };
+  head.appendChild(prev); head.appendChild(title); head.appendChild(next);
+  host.appendChild(head);
+
+  const grid = document.createElement("div"); grid.className="cal-grid";
+  for(const wd of ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]){
+    const h = document.createElement("div"); h.className="cal-wd"; h.textContent=wd; grid.appendChild(h);
+  }
+  const lead = (new Date(y, m, 1).getDay()+6)%7;   // Monday-first, matching campaign weeks
+  for(let i=0;i<lead;i++){ const c=document.createElement("div"); c.className="cal-cell empty"; grid.appendChild(c); }
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  for(let day=1; day<=daysInMonth; day++){
+    const ds = isoDate(new Date(y, m, day));
+    const xp = totals[ds]||0;
+    const c = document.createElement("div");
+    c.className = "cal-cell i"+statsIntensity(xp);
+    if(ds===today) c.classList.add("today");
+    if(statsSelectedDay===ds) c.classList.add("sel");
+    let marks = "";
+    if(lvlUps.has(ds)) marks += '<span class="mk-lvl" title="Level up">Λ</span>';
+    if(bDates[ds]) marks += '<span class="mk-badge" title="'+escapeHtml(bDates[ds].join(", "))+'">◆</span>';
+    c.innerHTML = `<span class="dnum">${day}</span><span class="mks">${marks}</span>`;
+    if(xp>0 || bDates[ds]){
+      c.classList.add("has");
+      c.title = xp+" XP — click for the day's log";
+      c.onclick = ()=>{ statsSelectedDay = (statsSelectedDay===ds) ? null : ds; renderStatsCalendar(); };
+    }
+    grid.appendChild(c);
+  }
+  host.appendChild(grid);
+
+  const leg = document.createElement("div"); leg.className="cal-legend";
+  leg.innerHTML = `<span><i class="i1"></i>&lt;150 XP</span><span><i class="i2"></i>150–399</span>`+
+    `<span><i class="i3"></i>400+</span><span><b class="mk-lvl">Λ</b> level up</span>`+
+    `<span><b class="mk-badge">◆</b> badge achieved</span>`;
+  host.appendChild(leg);
+
+  if(statsSelectedDay){
+    const det = document.createElement("div"); det.className="cal-detail";
+    const dh = document.createElement("div"); dh.className="cal-day-head";
+    dh.textContent = statsSelectedDay + " — " + (totals[statsSelectedDay]||0) + " XP";
+    det.appendChild(dh);
+    const ul = document.createElement("ul"); ul.className="log-list";
+    for(const name of (bDates[statsSelectedDay]||[])){
+      const li = document.createElement("li"); li.className="cal-badge-line";
+      li.innerHTML = `<span>Λ Badge achieved — ${escapeHtml(name)}</span>`;
+      ul.appendChild(li);
+    }
+    const entries = state.log.filter(e=>e.date===statsSelectedDay).sort((a,b)=>a.ts.localeCompare(b.ts));
+    for(const e of entries){
+      const act = activityById(e.domain, e.activity);
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="what">${act?act.name:e.activity}${e.note?" — "+escapeHtml(e.note):""}</span>
+        <span class="xp">+${e.awarded}</span>`;
+      ul.appendChild(li);
+    }
+    det.appendChild(ul);
+    host.appendChild(det);
+  }
+}
+function renderStats(){ renderStatsWeek(); renderStatsCalendar(); }
+
 /* ---------- log tab (preserved from v1) ---------- */
 function renderDomains(){
   const today = isoDate(new Date());
@@ -2100,7 +2323,7 @@ function renderAll(){
   renderHeader();
   renderCampaign(); renderWarSummary(); renderPushLine(); renderUnits();
   renderDomains(); renderLog();
-  renderArmory(); renderResearch(); renderBosses();
+  renderArmory(); renderResearch(); renderBosses(); renderStats();
 }
 
 $("logBtn").onclick = logEntry;
